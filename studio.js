@@ -11,6 +11,15 @@ let client=null,user=null,profile=null,viewed=null,mode='received',publicList=[]
 const say=(s)=>{msg.textContent=s};
 const text=(tag,value,cls)=>{const n=document.createElement(tag);if(cls)n.className=cls;n.textContent=value??'';return n};
 const validLink=s=>{try{const u=new URL(s);return /^https?:$/.test(u.protocol)?u.href:null}catch{return null}};
+async function loadMembership(){
+ const level=$('membershipLevel'),detail=$('membershipDetail');if(!level||!detail)return;
+ if(!user){level.textContent='Free membership';detail.textContent='Sign in to view your membership.';return}
+ const {data,error}=await client.from('creator_memberships').select('tier,status,current_period_end').eq('user_id',user.id).maybeSingle();
+ if(error){level.textContent='Membership unavailable';detail.textContent='Run V10_MEMBERSHIPS.sql in Supabase to enable account status. No payment is active.';return}
+ const active=data?.status==='active'&&['pro','studio'].includes(data?.tier);
+ level.textContent=active?(data.tier==='studio'?'Studio membership':'Pro membership'):'Free membership';
+ detail.textContent=active?'Status: active. Paid billing is not enabled on this preview.':'Free plan active · Upgrades coming soon. No charges will be made.';
+}
 function updateMenu(){ $('studioGuest').classList.toggle('hidden',!!user);$('studioMember').classList.toggle('hidden',!user);$('inquiryGuest').classList.toggle('hidden',!!user);$('inquiryMember').classList.toggle('hidden',!user);if(user)loadMyMedia();}
 function buildChoices(){const container=$('specialtyChoices');for(const c of choices){const lbl=document.createElement('label');const cb=document.createElement('input');cb.type='checkbox';cb.value=c;cb.name='extraSpecialty';lbl.append(cb,document.createTextNode(c));container.append(lbl)}}
 buildChoices();
@@ -22,7 +31,7 @@ function specialtiesOf(p){return [...new Set([p.specialty,...(Array.isArray(p.sp
 function primaryAndSelected(f){const primary=String(f.get('specialty')||'Weddings');return [primary,...[...$('specialtyChoices').querySelectorAll('input:checked')].map(x=>x.value).filter(x=>x!==primary)]}
 function fillForm(p){const f=$('onlineProfileForm');for(const [key,val] of Object.entries(p)){const el=f.elements.namedItem(key);if(!el||key==='specialties')continue;if(el.type==='checkbox')el.checked=!!val;else el.value=val??''}const set=new Set(p.specialties||[]);$('specialtyChoices').querySelectorAll('input').forEach(x=>x.checked=set.has(x.value));}
 function showStudio(){if(!user)return;$('studioProfileSummary').replaceChildren();const p=profile;const summary=$('studioProfileSummary');if(!p){summary.append(text('p','First, add your name, location, main specialty and rate in My Account. Then upload your creative work below.'));return}summary.append(text('h3',p.display_name),text('p',p.role+' · '+p.city+', '+p.state),text('p',specialtiesOf(p).join('  ·  ')));if(!p.is_public)summary.append(text('p','Private profile — turn on Publish in My Account when ready.'))}
-async function updateAuth(){const {data,error}=await client.auth.getUser();const before=user?.id;user=error?null:data.user;guest.classList.toggle('hidden',!!user);member.classList.toggle('hidden',!user);updateMenu();if(!user){profile=null;return}$('signedInAs').textContent=user.email||'Signed in';if(before!==user.id||!profile){const q=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(q.error){say('Could not load your profile: '+q.error.message);return}profile=q.data; if(profile)fillForm(profile);showStudio();await updateInquiryBadge()}}
+async function updateAuth(){const {data,error}=await client.auth.getUser();const before=user?.id;user=error?null:data.user;guest.classList.toggle('hidden',!!user);member.classList.toggle('hidden',!user);updateMenu();if(!user){profile=null;loadMembership();return}$('signedInAs').textContent=user.email||'Signed in';await loadMembership();if(before!==user.id||!profile){const q=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(q.error){say('Could not load your profile: '+q.error.message);return}profile=q.data; if(profile)fillForm(profile);showStudio();await updateInquiryBadge()}}
 async function refreshProfile(){if(!user)return;const {data,error}=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(!error){profile=data;if(profile)fillForm(profile);showStudio();await updateInquiryBadge()}}
 const forms=[$('signupForm'),$('loginForm')];
 if(!ready){forms.forEach(f=>f.querySelectorAll('input,button').forEach(x=>x.disabled=true));notice.textContent='Account configuration is missing. Upload config.js containing only your public Supabase project URL and publishable key.';return}
