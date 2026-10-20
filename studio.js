@@ -16,7 +16,7 @@ function buildChoices(){const container=$('specialtyChoices');for(const c of cho
 buildChoices();
 function studioTab(tab){for(const t of ['posts','details','reviews']){const el=$(t==='posts'?'studioPostsTab':t==='details'?'studioDetailsTab':'studioReviewsTab');el.classList.toggle('hidden',t!==tab)}document.querySelectorAll('[data-studio-tab]').forEach(b=>b.classList.toggle('on',b.dataset.studioTab===tab))}
 document.querySelectorAll('[data-studio-tab]').forEach(b=>b.addEventListener('click',()=>studioTab(b.dataset.studioTab)));
-$('postMediaForm').querySelectorAll('input[name="postType"]').forEach(r=>r.addEventListener('change',()=>{$('postMediaFile').accept=r.value==='video'?'video/mp4,video/webm,video/quicktime':'image/jpeg,image/png,image/webp';$('postMediaFile').value=''}));
+$('postMediaForm').querySelectorAll('input[name="postType"]').forEach(r=>r.addEventListener('change',()=>{$('postMediaFile').accept=r.value==='video'?'video/mp4,video/webm,video/quicktime,.mov,.mp4,.webm':'image/jpeg,image/png,image/webp';$('postMediaFile').value=''}));
 
 function specialtiesOf(p){return [...new Set([p.specialty,...(Array.isArray(p.specialties)?p.specialties:[])].filter(Boolean))]}
 function primaryAndSelected(f){const primary=String(f.get('specialty')||'Weddings');return [primary,...[...$('specialtyChoices').querySelectorAll('input:checked')].map(x=>x.value).filter(x=>x!==primary)]}
@@ -35,8 +35,8 @@ $('onlineProfileForm').addEventListener('submit',async e=>{e.preventDefault();if
  say('Saving your studio…');const {error}=await client.from('profiles').upsert(data,{onConflict:'id'});if(error)return say('Could not save profile: '+error.message+' — did you run the v2 SQL migration?');say('Profile saved! '+(data.is_public?'Anyone can discover your work.':'It remains private.'));await refreshProfile();await loadCreators();});
 // Storage uploads must use per-user folders and Supabase Storage RLS. Never put private files in a public bucket.
 const fileName=(f)=>{const ext=(f.name.split('.').pop()||'bin').toLowerCase();const clean=ext.replace(/[^a-z0-9]/g,'');return crypto.randomUUID()+'.'+clean};
-// Automatically scale/compress images locally before uploading. Supabase bucket cap stays 25 MB,
-// but we target < 5 MB images for speed and bandwidth. Videos can be uploaded up to 100 MB when project limits allow.
+// Photos are optimized locally. Large videos use resumable TUS uploads when Supabase permits.
+const MAX_VIDEO_BYTES=500*1024*1024;
 async function optimizePhoto(file){
   if(file.size>150*1024*1024)throw Error('This image is unusually large (over 150 MB). Choose a smaller source file.');
   const objectUrl=URL.createObjectURL(file);
@@ -72,11 +72,31 @@ async function uploadToStorage(file,kind){
     prepared=await optimizePhoto(file);
   }
   const mime=(prepared.type||'').toLowerCase();
-  if(isVideo&&!['video/mp4','video/webm','video/quicktime'].includes(mime))throw Error('Use MP4, WebM or MOV video.');
-  if(isVideo&&prepared.size>100*1024*1024)throw Error('Video exceeds the 100 MB limit. Export a smaller H.264 MP4.');
+  if(isVideo&&!['video/mp4','video/webm','video/quicktime'].includes(mime)&&!(/\.(mov|mp4|webm)$/i.test(prepared.name)))throw Error('Use MP4, MOV or WebM video.');
+  if(isVideo&&prepared.size>MAX_VIDEO_BYTES)throw Error('Video exceeds 500 MB. Export a compressed H.264 MP4.');
   const path=user.id+'/'+kind+'/'+fileName(prepared);
-  const {error}=await client.storage.from('creator-media').upload(path,prepared,{contentType:mime,cacheControl:'3600',upsert:false});
-  if(error)throw Error(error.message);
+  if(isVideo){
+    if(!window.tus?.Upload)throw Error('Resumable upload library could not load. Check your internet connection and refresh.');
+    const {data:session,error:authError}=await client.auth.getSession();
+    if(authError||!session?.session?.access_token)throw Error('Your login expired. Sign in again.');
+    const endpoint=cfg.supabaseUrl.replace(/\/$/,'')+'/storage/v1/upload/resumable';
+    const contentType=mime||(/\.mov$/i.test(file.name)?'video/quicktime':'video/mp4');
+    await new Promise((resolve,reject)=>{
+      const upload=new window.tus.Upload(prepared,{
+        endpoint,chunkSize:6*1024*1024,retryDelays:[0,1000,3000,5000,10000],
+        uploadDataDuringCreation:true,removeFingerprintOnSuccess:true,
+        headers:{authorization:'Bearer '+session.session.access_token,apikey:cfg.supabaseAnonKey,'x-upsert':'false'},
+        metadata:{bucketName:'creator-media',objectName:path,contentType,cacheControl:'3600'},
+        onError:error=>reject(Error(error.message||String(error))),
+        onProgress:(sent,total)=>{const status=$('postMediaStatus');if(status)status.textContent='Uploading video: '+Math.floor(sent/total*100)+'% — keep this page open.'},
+        onSuccess:()=>resolve()
+      });
+      upload.findPreviousUploads().then(previous=>{if(previous.length)upload.resumeFromPreviousUpload(previous[0]);upload.start()}).catch(reject);
+    });
+  }else{
+    const {error}=await client.storage.from('creator-media').upload(path,prepared,{contentType:mime,cacheControl:'3600',upsert:false});
+    if(error)throw Error(error.message);
+  }
   const {data}=client.storage.from('creator-media').getPublicUrl(path);
   return {path,url:data.publicUrl};
 }
@@ -94,7 +114,7 @@ async function uploadOnePortfolio(file,kind,caption=''){
  if(dbErr){await client.storage.from('creator-media').remove([res.path]);throw Error(dbErr.message+' — check that PROFILE_HUB_v4.sql has run.');}
  return true;
 }
-$('postMediaForm').addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget,file=$('postMediaFile').files?.[0],kind=String(new FormData(f).get('postType')||'image'),caption=String(new FormData(f).get('caption')||'').trim(),status=$('postMediaStatus'),btn=$('publishPostBtn');if(!file||!caption){status.textContent='Choose a file and add its description.';return}if(kind==='video'&&!file.type.startsWith('video/')){status.textContent='Choose a video for a video post.';return}if(kind==='image'&&!file.type.startsWith('image/')){status.textContent='Choose a photo for a photo post.';return}btn.disabled=true;status.textContent='Uploading your post… Larger videos may take a while. Please keep this page open.';try{await uploadOnePortfolio(file,kind,caption);status.textContent='Published! View it below or on your public profile.';f.reset();$('postMediaFile').accept='image/jpeg,image/png,image/webp';await loadMyMedia()}catch(err){status.textContent='Could not publish: '+err.message}finally{btn.disabled=false}});
+$('postMediaForm').addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget,file=$('postMediaFile').files?.[0],kind=String(new FormData(f).get('postType')||'image'),caption=String(new FormData(f).get('caption')||'').trim(),status=$('postMediaStatus'),btn=$('publishPostBtn');if(!file||!caption){status.textContent='Choose a file and add its description.';return}if(kind==='video'&&!file.type.startsWith('video/')&&!/\.(mov|mp4|webm)$/i.test(file.name)){status.textContent='Choose a video for a video post.';return}if(kind==='image'&&!file.type.startsWith('image/')){status.textContent='Choose a photo for a photo post.';return}btn.disabled=true;status.textContent='Uploading your post… Larger videos may take a while. Please keep this page open.';try{await uploadOnePortfolio(file,kind,caption);status.textContent='Published! View it below or on your public profile.';f.reset();$('postMediaFile').accept='image/jpeg,image/png,image/webp';await loadMyMedia()}catch(err){status.textContent='Could not publish: '+err.message}finally{btn.disabled=false}});
 async function loadMyMedia(){if(!user||!profile)return;const out=$('manageMedia');const {data,error}=await client.from('portfolio_media').select('*').eq('user_id',user.id).order('created_at',{ascending:false}).limit(25);out.replaceChildren();if(error){out.append(text('p','Portfolio unavailable: '+error.message));return}if(!(data||[]).length){out.append(text('p','No posts yet — upload your first photo or film above.'));return}for(const m of data||[]){const item=document.createElement('div');item.className='gallery-item';const media=document.createElement(m.media_type==='video'?'video':'img');media.src=m.media_url;if(m.media_type==='video'){media.controls=true;media.preload='metadata';media.playsInline=true}else{media.loading='lazy';media.alt=m.caption||m.title||'My portfolio post'};const foot=text('div',m.media_type==='video'?'🎬 Video':'📷 Photo','gallery-foot'),caption=text('div',m.caption||'No caption yet','gallery-caption'),tools=document.createElement('div');tools.className='gallery-tools';const edit=text('button','Edit caption','edit-caption');edit.onclick=async()=>{const value=prompt('Write a description for this post (500 characters maximum):',m.caption||'');if(value===null)return;if(value.length>500)return alert('Descriptions must be 500 characters or fewer.');const {error}=await client.from('portfolio_media').update({caption:value}).eq('id',m.id).eq('user_id',user.id);if(error)return alert('Could not save description: '+error.message);await loadMyMedia()};const del=text('button','Delete');del.onclick=async()=>{if(!confirm('Permanently remove this portfolio item?'))return;const {error:dbErr}=await client.from('portfolio_media').delete().eq('id',m.id).eq('user_id',user.id);if(dbErr)return alert(dbErr.message);await client.storage.from('creator-media').remove([m.storage_path]);await loadMyMedia()};tools.append(edit,del);item.append(media,foot,caption,tools);out.append(item)}}
 $('viewMine').onclick=()=>openProfile(user?.id);$('hubViewProfile').onclick=()=>openProfile(user?.id);$('hubRefreshPosts').onclick=()=>loadMyMedia();
 async function loadCreators(){const {data,error}=await client.from('profiles').select('id,display_name,city,state,role,specialty,specialties,hourly_rate,avatar_url,cover_url,bio,portfolio_url,instagram_url,available_for_second_shooting,is_public').eq('is_public',true).order('created_at',{ascending:false}).limit(100);if(error){console.warn('Public profiles:',error.message);return}publicList=data||[];for(const p of publicList)creatorCache.set(p.id,p);showCreators=renderCreators;renderCreators()}
