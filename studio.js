@@ -30,11 +30,55 @@ $('onlineProfileForm').addEventListener('submit',async e=>{e.preventDefault();if
  say('Saving your studio…');const {error}=await client.from('profiles').upsert(data,{onConflict:'id'});if(error)return say('Could not save profile: '+error.message+' — did you run the v2 SQL migration?');say('Profile saved! '+(data.is_public?'Anyone can discover your work.':'It remains private.'));await refreshProfile();await loadCreators();});
 // Storage uploads must use per-user folders and Supabase Storage RLS. Never put private files in a public bucket.
 const fileName=(f)=>{const ext=(f.name.split('.').pop()||'bin').toLowerCase();const clean=ext.replace(/[^a-z0-9]/g,'');return crypto.randomUUID()+'.'+clean};
-async function uploadToStorage(file,kind){if(!user||!profile)throw Error('Save your creator profile first.');const isVideo=kind==='video';const mime=(file.type||'').toLowerCase();const supported=isVideo?['video/mp4','video/webm','video/quicktime']:['image/jpeg','image/png','image/webp'];if(!supported.includes(mime))throw Error('Unsupported media type. '+(isVideo?'Use MP4, WebM or MOV.':'Use JPG, PNG or WebP.'));if(file.size>(isVideo?25:5)*1024*1024)throw Error('File too large. Limit '+(isVideo?'25 MB':'5 MB')+'.');const path=user.id+'/'+kind+'/'+fileName(file);const {error}=await client.storage.from('creator-media').upload(path,file,{contentType:mime,cacheControl:'3600',upsert:false});if(error)throw Error(error.message);const {data}=client.storage.from('creator-media').getPublicUrl(path);return {path,url:data.publicUrl};}
-async function uploadPortrait(input,field,kind,statusId){const f=input.files?.[0];if(!f)return;const status=$(statusId);status.textContent='Uploading…';try{const res=await uploadToStorage(f,kind);const {error}=await client.from('profiles').update({[field]:res.url}).eq('id',user.id);if(error)throw Error(error.message);status.textContent='Saved!';if(field==='avatar_url')$('onlineProfileForm').elements.avatar_url.value=res.url;await refreshProfile();await loadCreators()}catch(err){status.textContent='Upload failed: '+err.message}finally{input.value=''}}
+// Automatically scale/compress images locally before uploading. Supabase bucket cap stays 25 MB,
+// but we target < 5 MB images for speed and bandwidth. Videos remain capped at 25 MB.
+async function optimizePhoto(file){
+  if(file.size>150*1024*1024)throw Error('This image is unusually large (over 150 MB). Choose a smaller source file.');
+  const objectUrl=URL.createObjectURL(file);
+  let image;
+  try{
+    image=await new Promise((resolve,reject)=>{
+      const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('This image format could not be opened by your browser. Try JPG, PNG or WebP.'));img.src=objectUrl;
+    });
+    let edge=2600,quality=.88;
+    for(let attempt=0;attempt<9;attempt++){
+      const scale=Math.min(1,edge/Math.max(image.naturalWidth,image.naturalHeight));
+      const width=Math.max(1,Math.round(image.naturalWidth*scale));
+      const height=Math.max(1,Math.round(image.naturalHeight*scale));
+      const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+      const ctx=canvas.getContext('2d');if(!ctx)throw Error('Photo processing is not supported in this browser.');
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);
+      ctx.drawImage(image,0,0,width,height);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',quality));
+      canvas.width=0;canvas.height=0;
+      if(!blob)throw Error('Could not prepare this photo for upload.');
+      if(blob.size<=4.5*1024*1024)return new File([blob],(file.name.replace(/\.[^.]+$/,'')||'photo')+'.jpg',{type:'image/jpeg'});
+      if(quality>.60)quality-=.12;else edge=Math.round(edge*.75);
+    }
+    throw Error('Could not reduce the photo sufficiently. Try a smaller source image.');
+  } finally {URL.revokeObjectURL(objectUrl)}
+}
+async function uploadToStorage(file,kind){
+  if(!user||!profile)throw Error('Save your creator profile first.');
+  const isVideo=kind==='video';
+  let prepared=file;
+  if(!isVideo){
+    if(!file.type.startsWith('image/'))throw Error('Choose an image file.');
+    prepared=await optimizePhoto(file);
+  }
+  const mime=(prepared.type||'').toLowerCase();
+  if(isVideo&&!['video/mp4','video/webm','video/quicktime'].includes(mime))throw Error('Use MP4, WebM or MOV video.');
+  if(isVideo&&prepared.size>25*1024*1024)throw Error('Video exceeds the 25 MB limit. Larger video uploads need a separate video-processing service.');
+  const path=user.id+'/'+kind+'/'+fileName(prepared);
+  const {error}=await client.storage.from('creator-media').upload(path,prepared,{contentType:mime,cacheControl:'3600',upsert:false});
+  if(error)throw Error(error.message);
+  const {data}=client.storage.from('creator-media').getPublicUrl(path);
+  return {path,url:data.publicUrl};
+}
+async function uploadPortrait(input,field,kind,statusId){const f=input.files?.[0];if(!f)return;const status=$(statusId);status.textContent='Preparing photo and uploading…';try{const res=await uploadToStorage(f,kind);const {error}=await client.from('profiles').update({[field]:res.url}).eq('id',user.id);if(error)throw Error(error.message);status.textContent='Saved!';if(field==='avatar_url')$('onlineProfileForm').elements.avatar_url.value=res.url;await refreshProfile();await loadCreators()}catch(err){status.textContent='Upload failed: '+err.message}finally{input.value=''}}
 $('avatarUpload').addEventListener('change',e=>uploadPortrait(e.target,'avatar_url','avatar','avatarStatus'));
 $('coverUpload').addEventListener('change',e=>uploadPortrait(e.target,'cover_url','cover','coverStatus'));
-async function uploadPortfolio(e,kind){const chosen=Array.from(e.target.files||[]);if(!chosen.length)return;const status=$('uploadMessage');if(!profile){status.textContent='First save your creator profile under My Account.';e.target.value='';return}const {data, error}=await client.from('portfolio_media').select('media_type').eq('user_id',user.id);if(error){status.textContent='Database not ready: '+error.message;return}let count=(data||[]).filter(m=>m.media_type===kind).length;const max=kind==='video'?3:12;for(const f of chosen){if(count>=max){status.textContent='Limit reached: '+max+' '+kind+' files.';break}status.textContent='Uploading '+f.name+'…';let res;try{res=await uploadToStorage(f,kind);const {error:dbErr}=await client.from('portfolio_media').insert({user_id:user.id,media_type:kind,storage_path:res.path,media_url:res.url,title:f.name.slice(0,100),sort_order:count});if(dbErr){await client.storage.from('creator-media').remove([res.path]);throw Error(dbErr.message)}count++;status.textContent='Uploaded '+count+' '+kind+' file(s).'}catch(err){status.textContent='Upload failed for '+f.name+': '+err.message;break}}e.target.value='';await loadMyMedia()}
+async function uploadPortfolio(e,kind){const chosen=Array.from(e.target.files||[]);if(!chosen.length)return;const status=$('uploadMessage');if(!profile){status.textContent='First save your creator profile under My Account.';e.target.value='';return}const {data, error}=await client.from('portfolio_media').select('media_type').eq('user_id',user.id);if(error){status.textContent='Database not ready: '+error.message;return}let count=(data||[]).filter(m=>m.media_type===kind).length;const max=kind==='video'?3:12;for(const f of chosen){if(count>=max){status.textContent='Limit reached: '+max+' '+kind+' files.';break}status.textContent=(kind==='image'?'Optimizing and uploading ':'Uploading ')+f.name+'…';let res;try{res=await uploadToStorage(f,kind);const {error:dbErr}=await client.from('portfolio_media').insert({user_id:user.id,media_type:kind,storage_path:res.path,media_url:res.url,title:f.name.slice(0,100),sort_order:count});if(dbErr){await client.storage.from('creator-media').remove([res.path]);throw Error(dbErr.message)}count++;status.textContent='Uploaded '+count+' '+kind+' file(s).'}catch(err){status.textContent='Upload failed for '+f.name+': '+err.message;break}}e.target.value='';await loadMyMedia()}
 $('photoUpload').addEventListener('change',e=>uploadPortfolio(e,'image'));
 $('videoUpload').addEventListener('change',e=>uploadPortfolio(e,'video'));
 async function loadMyMedia(){if(!user||!profile)return;const out=$('manageMedia');const {data,error}=await client.from('portfolio_media').select('*').eq('user_id',user.id).order('created_at',{ascending:false}).limit(25);out.replaceChildren();if(error){out.append(text('p','Portfolio unavailable: '+error.message+' (run the v2 migration first)'));return}for(const m of data||[]){const item=document.createElement('div');item.className='gallery-item';const media=document.createElement(m.media_type==='video'?'video':'img');media.src=m.media_url;if(m.media_type==='video'){media.controls=true;media.preload='metadata';media.playsInline=true}else media.loading='lazy';const foot=document.createElement('div');foot.className='gallery-foot';foot.append(text('span',m.title?.slice(0,22)||m.media_type));const del=text('button','Delete');del.onclick=async()=>{if(!confirm('Remove this portfolio item?'))return;const {error:dbErr}=await client.from('portfolio_media').delete().eq('id',m.id).eq('user_id',user.id);if(dbErr)return alert(dbErr.message);await client.storage.from('creator-media').remove([m.storage_path]);await loadMyMedia()};foot.append(del);item.append(media,foot);out.append(item)}}
