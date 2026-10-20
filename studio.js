@@ -147,10 +147,61 @@ async function loadCreators(){const {data,error}=await client.from('profiles').s
 function renderCreators(){const out=$('creators');out.replaceChildren();const query=$('search').value.trim().toLowerCase(),place=$('location').value.trim().toLowerCase();const matches=publicList.filter(p=>(current==='All'||specialtiesOf(p).includes(current))&&(!query||[p.display_name,p.role,...specialtiesOf(p)].join(' ').toLowerCase().includes(query))&&(!place||[p.city,p.state].join(' ').toLowerCase().includes(place)));if(!matches.length){out.append(text('div','No public creators match your search yet.','empty'));return}for(const p of matches){const item=document.createElement('article');item.className='creator';const image=document.createElement('img');image.alt='Creator portrait';image.loading='lazy';image.src=validLink(p.avatar_url)||IMAGES.creator1;const body=document.createElement('div');body.className='creatorcontent';body.append(text('h3',p.display_name),text('div',p.role+' · '+p.city+', '+p.state,'meta'));const tags=document.createElement('div');tags.className='chipline';for(const s of specialtiesOf(p).slice(0,4))tags.append(text('span',s));body.append(tags);if(p.hourly_rate!==null)body.append(text('div','From $'+p.hourly_rate+'/hr','rates'));const btn=text('button','View profile →','filter');btn.onclick=()=>openProfile(p.id);body.append(btn);item.append(image,body);out.append(item)}}
 async function openProfile(id){if(!id)return;let p=creatorCache.get(id);if(!p){const {data,error}=await client.from('profiles').select('*').eq('id',id).maybeSingle();if(error||!data){alert('Profile unavailable or not published.');return}p=data}if(p.is_public===false&&id!==user?.id){alert('This profile is private.');return}viewed=p;go('publicprofile');$('pubName').textContent=p.display_name||'Creative';$('pubSubtitle').textContent=[p.role,p.city,p.state].filter(Boolean).join(' · ');$('pubBio').textContent=p.bio||'This creator is still writing their story.';$('pubCover').style.backgroundImage=validLink(p.cover_url)?'linear-gradient(0deg,#08171979,#08171912),url("'+CSS.escape(p.cover_url)+'")':'';const a=$('pubAvatar');a.replaceChildren();if(validLink(p.avatar_url)){const img=document.createElement('img');img.alt='Creator photo';img.src=p.avatar_url;a.append(img)}else a.textContent=(p.display_name||'SH').slice(0,2).toUpperCase();const specials=$('pubSpecialties');specials.replaceChildren();for(const s of specialtiesOf(p))specials.append(text('span',s));$('pubDetails').replaceChildren();if(p.hourly_rate!==null)$('pubDetails').append(text('p','Starting from $'+p.hourly_rate+'/hour'));if(p.available_for_second_shooting)$('pubDetails').append(text('p','✓ Available for second shooting'));$('pubDetails').append(text('p',p.city+', '+p.state));const links=$('pubLinks');links.replaceChildren();for(const [title,url] of [['Website',p.portfolio_url],['Instagram',p.instagram_url]]){const safe=validLink(url);if(safe){const a=document.createElement('a');a.href=safe;a.target='_blank';a.rel='noopener noreferrer';a.textContent=title+' ↗';links.append(a)}}$('inquireBtn').onclick=()=>startInquiry(p);$('inquireBtn').disabled=id===user?.id;const {data,error}=await client.from('portfolio_media').select('id,media_type,media_url,title,caption,thumbnail_url').eq('user_id',id).order('sort_order').limit(60);v5Media=data||[];v5Filter='video';$('pubMediaEmpty').textContent=error?'Gallery unavailable: '+error.message:!v5Media.length?'This creator hasn’t added portfolio work yet.':'';renderV5Feed();}
 function renderV5Feed(){const gal=$('pubMedia');gal.replaceChildren();gal.classList.toggle('photos-mode',v5Filter==='image');document.querySelectorAll('[data-v5-filter]').forEach(b=>b.classList.toggle('active',b.dataset.v5Filter===v5Filter));const items=v5Media.filter(m=>v5Filter==='all'||m.media_type===v5Filter);if(v5Media.length&&!items.length)$('pubMediaEmpty').textContent=v5Filter==='video'?'No videos yet. Try Photos or All work.':'No photos yet. Try Videos or All work.';else if(v5Media.length)$('pubMediaEmpty').textContent='';for(const m of items){const figure=document.createElement('figure');figure.className=m.media_type==='video'?'film':'';const media=document.createElement(m.media_type==='video'?'video':'img');media.src=m.media_url;if(m.media_type==='video'){media.controls=!!m.thumbnail_url;media.playsInline=true;media.preload='metadata';if(m.thumbnail_url)media.poster=m.thumbnail_url}else{media.loading='lazy';media.alt=m.title||'Portfolio work'}media.ondblclick=()=>expandV5(m);let cover=null;if(m.media_type==='video'&&m.thumbnail_url){media.removeAttribute('src');media.controls=false;media.preload='none';cover=document.createElement('button');cover.className='v7-video-cover';cover.type='button';cover.setAttribute('aria-label','Play '+(m.caption||m.title||'wedding film'));const poster=document.createElement('img');poster.src=m.thumbnail_url;poster.alt='Video cover for '+(m.caption||m.title||'film');poster.loading='lazy';const play=text('span','▶','v7-play');cover.append(poster,play);cover.onclick=()=>expandV5(m);media.replaceWith(cover)}const caption=text('figcaption',m.caption||m.title||'Selected work');const actions=document.createElement('div');actions.className='v5-actions';const like=text('button','♡ Like');const comments=text('button','💬 Comments');const expand=text('button','⛶ Expand');const commentArea=document.createElement('div');commentArea.className='v5-comments hidden';expand.onclick=()=>expandV5(m);actions.append(like,comments,expand);figure.append(m.media_type==='video'&&m.thumbnail_url?cover:media,caption,actions,commentArea);gal.append(figure);initV5Social(m,like,comments,commentArea);}}
-function expandV5(m){const root=$('v5Lightbox'),area=$('v5Expanded');area.replaceChildren();const el=document.createElement(m.media_type==='video'?'video':'img');el.src=m.media_url;if(m.media_type==='video'){el.controls=true;el.autoplay=true;el.playsInline=true}else el.alt=m.title||'Portfolio photo';area.append(el);$('v5ExpandedCaption').textContent=m.caption||'';root.hidden=false;document.body.style.overflow='hidden'}
-function closeV5(){const video=$('v5Expanded').querySelector('video');if(video)video.pause();$('v5Lightbox').hidden=true;document.body.style.overflow=''}
-$('v5Close').onclick=closeV5;$('v5Lightbox').addEventListener('click',e=>{if(e.target===$('v5Lightbox'))closeV5()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeV5()});
-document.querySelectorAll('[data-v5-filter]').forEach(b=>b.onclick=()=>{v5Filter=b.dataset.v5Filter;renderV5Feed()});
+let v8Current=null,v8Portrait=false,v8TouchStart=null;
+function v8Move(direction){
+  if(!v8Portrait||!v8Current)return;
+  const items=v5Media.filter(m=>m.media_type==='video');
+  const i=items.findIndex(m=>m.id===v8Current.id);
+  const target=items[i+direction];
+  if(target)expandV5(target);
+}
+function v8NavState(){
+  const items=v5Media.filter(m=>m.media_type==='video');
+  const index=items.findIndex(m=>m.id===v8Current?.id);
+  $('v8Prev').disabled=!v8Portrait||index<=0;
+  $('v8Next').disabled=!v8Portrait||index<0||index>=items.length-1;
+  $('v8Navigation').hidden=!v8Portrait||items.length<=1;
+  $('v8Counter').textContent=v8Portrait?(index+1)+' / '+items.length:'';
+}
+function expandV5(m){
+  const root=$('v5Lightbox'),area=$('v5Expanded');
+  const existing=area.querySelector('video');if(existing){existing.pause();existing.removeAttribute('src');existing.load()}
+  area.replaceChildren();v8Current=m;v8Portrait=false;
+  root.classList.remove('v8-portrait','v8-landscape','v8-photo');
+  root.classList.add(m.media_type==='video'?'v8-landscape':'v8-photo');
+  const el=document.createElement(m.media_type==='video'?'video':'img');
+  el.src=m.media_url;
+  if(m.media_type==='video'){
+    el.controls=true;el.autoplay=true;el.playsInline=true;
+    el.preload='metadata';if(m.thumbnail_url)el.poster=m.thumbnail_url;
+    el.addEventListener('loadedmetadata',()=>{
+      if(v8Current?.id!==m.id)return;
+      v8Portrait=el.videoHeight>el.videoWidth;
+      root.classList.toggle('v8-portrait',v8Portrait);
+      root.classList.toggle('v8-landscape',!v8Portrait);
+      v8NavState();
+    });
+  }else{el.alt=m.title||'Portfolio photo'}
+  area.append(el);
+  $('v5ExpandedCaption').textContent=m.caption||m.title||'';
+  $('v8PlayerTitle').textContent=m.title||'Selected work';
+  root.hidden=false;document.body.style.overflow='hidden';v8NavState();
+}
+function closeV5(){
+ const video=$('v5Expanded').querySelector('video');if(video){video.pause();video.removeAttribute('src');video.load()}
+ $('v5Expanded').replaceChildren();$('v5Lightbox').hidden=true;document.body.style.overflow='';v8Current=null;v8Portrait=false;
+}
+$('v5Close').onclick=closeV5;
+$('v5Lightbox').addEventListener('click',e=>{if(e.target===$('v5Lightbox'))closeV5()});
+$('v8Prev').onclick=()=>v8Move(-1);$('v8Next').onclick=()=>v8Move(1);
+$('v5Lightbox').addEventListener('touchstart',e=>{if(!v8Portrait||e.touches.length!==1)return;const t=e.touches[0];v8TouchStart={x:t.clientX,y:t.clientY}}, {passive:true});
+$('v5Lightbox').addEventListener('touchend',e=>{if(!v8Portrait||!v8TouchStart||e.changedTouches.length!==1)return;const t=e.changedTouches[0];const dy=t.clientY-v8TouchStart.y,dx=t.clientX-v8TouchStart.x;v8TouchStart=null;if(Math.abs(dy)>85&&Math.abs(dy)>Math.abs(dx)*1.4)v8Move(dy<0?1:-1)}, {passive:true});
+document.addEventListener('keydown',e=>{
+ if($('v5Lightbox').hidden)return;
+ if(e.key==='Escape')closeV5();
+ else if(v8Portrait&&['ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();v8Move(e.key==='ArrowDown'?1:-1)}
+});
+
 async function initV5Social(m,like,comments,area){const {data:likes,error}=await client.from('portfolio_likes').select('user_id').eq('media_id',m.id).limit(1000);if(error){like.title='Run the V5 database migration to enable likes';comments.title='Run the V5 database migration to enable comments';like.disabled=true;comments.disabled=true;return}let myLike=(likes||[]).some(l=>l.user_id===user?.id);let count=(likes||[]).length;const refresh=()=>{like.textContent=(myLike?'♥':'♡')+' '+count;like.classList.toggle('liked',myLike)};refresh();like.onclick=async()=>{if(!user){alert('Sign in to like this post.');return}like.disabled=true;const result=myLike?await client.from('portfolio_likes').delete().eq('media_id',m.id).eq('user_id',user.id):await client.from('portfolio_likes').insert({media_id:m.id,user_id:user.id});like.disabled=false;if(result.error){alert(result.error.message);return}count+=myLike?-1:1;myLike=!myLike;refresh()};comments.onclick=async()=>{area.classList.toggle('hidden');if(area.classList.contains('hidden'))return;await loadV5Comments(m,area)}}
 async function loadV5Comments(m,area){area.replaceChildren();const {data,error}=await client.from('portfolio_comments').select('id,user_id,body,created_at').eq('media_id',m.id).order('created_at',{ascending:false}).limit(40);if(error){area.append(text('p','Comments unavailable: '+error.message));return}for(const c of data||[])area.append(text('div',(c.user_id===user?.id?'You: ':'Member: ')+c.body,'v5-comment-item'));if(!user){area.append(text('small','Sign in to leave a comment.'));return}const form=document.createElement('form');const inp=document.createElement('input');inp.placeholder='Write a respectful comment…';inp.maxLength=500;inp.required=true;const submit=text('button','Post');submit.type='submit';form.append(inp,submit);form.onsubmit=async e=>{e.preventDefault();submit.disabled=true;const {error}=await client.from('portfolio_comments').insert({media_id:m.id,user_id:user.id,body:inp.value.trim()});submit.disabled=false;if(error){alert(error.message);return}await loadV5Comments(m,area)};area.append(form)}
 
