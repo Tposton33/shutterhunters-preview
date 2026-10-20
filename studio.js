@@ -9,6 +9,46 @@ const choices=['Weddings','Commercial','Real Estate','Events','Portraits','Sport
 let v5Media=[],v5Filter='video';
 let client=null,user=null,profile=null,viewed=null,mode='received',publicList=[],creatorCache=new Map();
 const say=(s)=>{msg.textContent=s};
+const billingStatus=()=>document.getElementById('stripeBillingStatus');
+function billingMessage(message){const el=billingStatus();if(el)el.textContent=message;}
+const billingConfigured=()=>Boolean(cfg.stripeSandboxEnabled===true);
+async function billingRequest(functionName,body={}){
+  if(!billingConfigured())throw new Error('Sandbox checkout is not configured. Complete V11 setup first.');
+  const {data:{session},error:authErr}=await client.auth.getSession();
+  if(authErr||!session?.access_token)throw new Error('Sign in to your ShutterHunters account first.');
+  const base=cfg.supabaseUrl.replace(/\/$/,'');
+  const result=await fetch(`${base}/functions/v1/${functionName}`,{
+    method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`,'apikey':cfg.supabaseAnonKey},
+    body:JSON.stringify(body)
+  });
+  let json={};try{json=await result.json()}catch{}
+  if(!result.ok||!json.url)throw new Error(json.error||`Billing service returned HTTP ${result.status}`);
+  const next=new URL(json.url);
+  if(next.protocol!=='https:'||!['checkout.stripe.com','billing.stripe.com'].includes(next.hostname))throw new Error('Unexpected billing destination');
+  window.location.assign(next.href);
+}
+function initSandboxBilling(){
+  const pro=document.getElementById('stripeProCheckout'),studio=document.getElementById('stripeStudioCheckout'),portal=document.getElementById('stripeBillingPortal');
+  if(!pro||!studio||!portal)return;
+  if(!billingConfigured()){
+    for(const b of [pro,studio,portal])b.disabled=true;
+    billingMessage('V11 sandbox integration preview. Complete secure server deployment and set stripeSandboxEnabled in config.js before testing checkout.');
+    return;
+  }
+  billingMessage('SANDBOX ONLY · Stripe test cards · No real charges. Paid visibility and messaging are not enabled.');
+  for(const [button,plan] of [[pro,'pro'],[studio,'studio']])button.addEventListener('click',async()=>{
+    button.disabled=true;billingMessage('Opening secure Stripe test checkout…');
+    try{await billingRequest('stripe-checkout',{plan})}catch(e){billingMessage(e.message);button.disabled=false}
+  });
+  portal.addEventListener('click',async()=>{portal.disabled=true;billingMessage('Opening subscription management…');try{await billingRequest('stripe-portal')}catch(e){billingMessage(e.message);portal.disabled=false}});
+  const q=new URLSearchParams(location.search),state=q.get('stripe_status');
+  if(state==='success'||state==='cancel'){
+    billingMessage(state==='success'?'Checkout returned. Membership changes can take a moment to sync; refresh My Account.':'Test checkout was cancelled. No membership change was made.');
+    q.delete('stripe_status');history.replaceState({},'',location.pathname+(q.size?'?'+q.toString():'')+location.hash);
+  }
+}
+initSandboxBilling();
+
 const text=(tag,value,cls)=>{const n=document.createElement(tag);if(cls)n.className=cls;n.textContent=value??'';return n};
 const validLink=s=>{try{const u=new URL(s);return /^https?:$/.test(u.protocol)?u.href:null}catch{return null}};
 async function loadMembership(){
@@ -18,7 +58,7 @@ async function loadMembership(){
  if(error){level.textContent='Membership unavailable';detail.textContent='Run V10_MEMBERSHIPS.sql in Supabase to enable account status. No payment is active.';return}
  const active=data?.status==='active'&&['pro','studio'].includes(data?.tier);
  level.textContent=active?(data.tier==='studio'?'Studio membership':'Pro membership'):'Free membership';
- detail.textContent=active?'Status: active. Paid billing is not enabled on this preview.':'Free plan active · Upgrades coming soon. No charges will be made.';
+ detail.textContent=active?'Status: active · Stripe sandbox subscription (test only).':'Free plan · Stripe sandbox upgrade testing available on the Membership page.';
 }
 function updateMenu(){ $('studioGuest').classList.toggle('hidden',!!user);$('studioMember').classList.toggle('hidden',!user);$('inquiryGuest').classList.toggle('hidden',!!user);$('inquiryMember').classList.toggle('hidden',!user);}
 function buildChoices(){const container=$('specialtyChoices');for(const c of choices){const lbl=document.createElement('label');const cb=document.createElement('input');cb.type='checkbox';cb.value=c;cb.name='extraSpecialty';lbl.append(cb,document.createTextNode(c));container.append(lbl)}}
