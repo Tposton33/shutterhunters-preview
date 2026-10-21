@@ -455,7 +455,7 @@ const exampleJobs=[{title:'Second wedding photographer',location:'Sacramento, CA
    const trigger=document.getElementById('v122EditorToggle');
    const owner=document.getElementById('shOwnerEditDetails');
    if(trigger&&owner){if(owner.hidden!==trigger.hidden)owner.hidden=trigger.hidden;
-     const postsButton=document.getElementById('shOwnerManagePosts');if(postsButton)postsButton.hidden=trigger.hidden;
+     const postsButton=document.getElementById('shOwnerManagePosts');if(postsButton && postsButton.hidden!==trigger.hidden)postsButton.hidden=trigger.hidden;
      const tier=document.getElementById('publicprofile');
      const label=tier?.classList.contains('v12-studio')?'Studio Design ':'Pro Design ';
      if(trigger.firstChild.textContent!==label)trigger.firstChild.textContent=label;
