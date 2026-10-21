@@ -71,7 +71,7 @@ function specialtiesOf(p){const values=[p?.specialty,...(Array.isArray(p?.specia
 function primaryAndSelected(f){const primary=String(f.get('specialty')||'Weddings');return [primary,...[...$('specialtyChoices').querySelectorAll('input:checked')].map(x=>x.value).filter(x=>x!==primary)]}
 function fillForm(p){const f=$('onlineProfileForm');for(const [key,val] of Object.entries(p)){const el=f.elements.namedItem(key);if(!el||key==='specialties')continue;if(el.type==='checkbox')el.checked=!!val;else el.value=val??''}const set=new Set(p.specialties||[]);$('specialtyChoices').querySelectorAll('input').forEach(x=>x.checked=set.has(x.value));}
 function showStudio(){if(!user)return;$('studioProfileSummary').replaceChildren();const p=profile;const summary=$('studioProfileSummary');if(!p){summary.append(text('p','First, add your name, location, main specialty and rate in My Account. Then upload your creative work below.'));return}summary.append(text('h3',p.display_name),text('p',p.role+' · '+p.city+', '+p.state),text('p',specialtiesOf(p).join('  ·  ')));if(!p.is_public)summary.append(text('p','Private profile — turn on Publish in My Account when ready.'))}
-async function updateAuth(){const {data,error}=await client.auth.getUser();const before=user?.id;user=error?null:data.user;guest.classList.toggle('hidden',!!user);member.classList.toggle('hidden',!user);updateMenu();if(!user){profile=null;v12ThemeLoadedFor=null;$('v12ThemePanel').hidden=true;loadMembership();v111LoadPlan();v111LoadSaved();return}$('signedInAs').textContent=user.email||'Signed in';await loadMembership();await v111LoadPlan();await v111LoadSaved();if(before!==user.id||!v12ThemeLoadedFor||v12ThemeLoadedFor!==user.id){v12ThemeLoadedFor=user.id;await v12LoadMyExperience()}if(before!==user.id||!profile){const q=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(q.error){say('Could not load your profile: '+q.error.message);return}profile=q.data; if(profile)fillForm(profile);showStudio();await loadMyMedia();await updateInquiryBadge()}else{await loadMyMedia()}}
+async function updateAuth(){const {data,error}=await client.auth.getUser();const before=user?.id;user=error?null:data.user;if(before!==user?.id){shActiveInquiry=null;const thread=$('shThread');if(thread)thread.hidden=true;}guest.classList.toggle('hidden',!!user);member.classList.toggle('hidden',!user);updateMenu();if(!user){profile=null;v12ThemeLoadedFor=null;$('v12ThemePanel').hidden=true;loadMembership();v111LoadPlan();v111LoadSaved();return}$('signedInAs').textContent=user.email||'Signed in';await loadMembership();await v111LoadPlan();await v111LoadSaved();if(before!==user.id||!v12ThemeLoadedFor||v12ThemeLoadedFor!==user.id){v12ThemeLoadedFor=user.id;await v12LoadMyExperience()}if(before!==user.id||!profile){const q=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(q.error){say('Could not load your profile: '+q.error.message);return}profile=q.data; if(profile)fillForm(profile);showStudio();await loadMyMedia();await updateInquiryBadge()}else{await loadMyMedia()}}
 async function refreshProfile(){if(!user)return;const {data,error}=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(!error){profile=data;if(profile)fillForm(profile);showStudio();await updateInquiryBadge()}}
 const forms=[$('signupForm'),$('loginForm')];
 if(!ready){forms.forEach(f=>f.querySelectorAll('input,button').forEach(x=>x.disabled=true));notice.textContent='Account configuration is missing. Upload config.js containing only your public Supabase project URL and publishable key.';return}
@@ -380,7 +380,60 @@ function startInquiry(p){if(!user){go('account');say('Sign in or create a free a
 $('closeInquiry').onclick=()=>$('inquiryModal').classList.add('hidden');$('inquiryModal').addEventListener('click',e=>{if(e.target===$('inquiryModal'))$('inquiryModal').classList.add('hidden')});
 $('inquiryForm').addEventListener('submit',async e=>{e.preventDefault();if(!user||!viewed||viewed.id===user.id)return;const f=new FormData(e.target);const row={sender_id:user.id,recipient_id:viewed.id,subject:String(f.get('subject')).trim(),message:String(f.get('message')).trim(),event_date:f.get('event_date')||null,budget:f.get('budget')?Number(f.get('budget')):null};$('inquiryFormStatus').textContent='Sending…';const {error}=await client.from('inquiries').insert(row);if(error){$('inquiryFormStatus').textContent='Could not send: '+error.message;return}$('inquiryForm').reset();$('inquiryModal').classList.add('hidden');alert('Your inquiry was sent! See it in Inquiries → Sent.');go('inquiries');mode='sent';await loadInquiries()});
 $('receivedTab').onclick=()=>{mode='received';loadInquiries()};$('sentTab').onclick=()=>{mode='sent';loadInquiries()};
-async function loadInquiries(){if(!user)return;$('receivedTab').classList.toggle('on',mode==='received');$('sentTab').classList.toggle('on',mode==='sent');const key=mode==='received'?'recipient_id':'sender_id';const {data,error}=await client.from('inquiries').select('*').eq(key,user.id).order('created_at',{ascending:false}).limit(100);const out=$('inquiryList');out.replaceChildren();$('inquiryStatus').textContent=error?'Inbox unavailable: '+error.message:!(data||[]).length?'No '+mode+' inquiries yet.':`${data.length} ${mode} inquiries`;if(error)return;await updateInquiryBadge();for(const i of data||[]){const d=document.createElement('article');d.className='inquiry-card';const top=document.createElement('header');top.append(text('h3',i.subject),text('span',i.status||'new','tag'));const when=i.event_date?' · Project date '+i.event_date:'';d.append(top,text('small',new Date(i.created_at).toLocaleString()+when),text('p',i.message));if(i.budget!==null)d.append(text('p','Budget: $'+i.budget));if(mode==='received'&&i.status==='new'){const btn=text('button','Mark reviewed','filter');btn.onclick=async()=>{const {error}=await client.from('inquiries').update({status:'reviewed'}).eq('id',i.id).eq('recipient_id',user.id);if(error)alert(error.message);else loadInquiries()};d.append(btn)}out.append(d)}}
+let shActiveInquiry=null;let shThreadLoadToken=0;
+async function shOpenThread(inquiry){
+ if(!user||![inquiry.sender_id,inquiry.recipient_id].includes(user.id))return;
+ shActiveInquiry=inquiry;
+ const section=$('shThread');section.hidden=false;
+ $('shThreadTitle').textContent=inquiry.subject||'Project conversation';
+ $('shThreadContext').textContent='Original request: '+(inquiry.message||'')+(inquiry.event_date?' · Project date '+inquiry.event_date:'');
+ $('shReplyText').value='';$('shReplyStatus').textContent='';
+ await shLoadThread();section.scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function shLoadThread(){
+ if(!shActiveInquiry||!user)return;
+ const id=shActiveInquiry.id,token=++shThreadLoadToken,out=$('shThreadMessages');
+ out.replaceChildren(text('p','Loading conversation…'));
+ const {data,error}=await client.from('inquiry_messages').select('id,sender_id,body,created_at').eq('inquiry_id',id).order('created_at',{ascending:true}).limit(200);
+ if(token!==shThreadLoadToken||shActiveInquiry?.id!==id)return;
+ out.replaceChildren();
+ if(error){out.append(text('p','Could not load replies: '+error.message+'. Check that V12_4_MESSAGES.sql was installed.'));return}
+ const first=document.createElement('article');first.className='sh-bubble'+(shActiveInquiry.sender_id===user.id?' mine':'');
+ first.append(text('small',(shActiveInquiry.sender_id===user.id?'You':'Other member')+' · Original inquiry'),text('p',shActiveInquiry.message||''));out.append(first);
+ for(const m of data||[]){const mine=m.sender_id===user.id;const bubble=document.createElement('article');bubble.className='sh-bubble'+(mine?' mine':'');bubble.append(text('small',(mine?'You':'Other member')+' · '+new Date(m.created_at).toLocaleString()),text('p',m.body));out.append(bubble)}
+ out.scrollTop=out.scrollHeight;
+}
+$('shThreadClose').addEventListener('click',()=>{$('shThread').hidden=true;shActiveInquiry=null;shThreadLoadToken++});
+$('shReplyRefresh').addEventListener('click',()=>shLoadThread());
+$('shReplyForm').addEventListener('submit',async e=>{
+ e.preventDefault();if(!user||!shActiveInquiry)return;
+ const body=$('shReplyText').value.trim(),btn=$('shReplySend');
+ if(!body||body.length>3000){$('shReplyStatus').textContent='Enter a message under 3,000 characters.';return}
+ const inquiryId=shActiveInquiry.id;btn.disabled=true;$('shReplyStatus').textContent='Sending…';
+ const {error}=await client.from('inquiry_messages').insert({inquiry_id:inquiryId,sender_id:user.id,body});
+ btn.disabled=false;
+ if(error){$('shReplyStatus').textContent='Message not sent: '+error.message;return}
+ $('shReplyText').value='';$('shReplyStatus').textContent='Sent!';await shLoadThread();
+});
+async function loadInquiries(){
+ if(!user){$('shThread').hidden=true;shActiveInquiry=null;return}
+ $('receivedTab').classList.toggle('on',mode==='received');$('sentTab').classList.toggle('on',mode==='sent');
+ const key=mode==='received'?'recipient_id':'sender_id';
+ const {data,error}=await client.from('inquiries').select('*').eq(key,user.id).order('created_at',{ascending:false}).limit(100);
+ const out=$('inquiryList');out.replaceChildren();
+ $('inquiryStatus').textContent=error?'Inbox unavailable: '+error.message:!(data||[]).length?'No '+mode+' inquiries yet.':`${data.length} ${mode} inquiries`;
+ if(error)return;await updateInquiryBadge();
+ for(const i of data||[]){
+  const d=document.createElement('article');d.className='inquiry-card';const top=document.createElement('header');top.append(text('h3',i.subject),text('span',i.status||'new','tag'));
+  const when=i.event_date?' · Project date '+i.event_date:'';
+  d.append(top,text('small',new Date(i.created_at).toLocaleString()+when),text('p',i.message));
+  if(i.budget!==null)d.append(text('p','Budget: $'+i.budget));
+  const open=text('button','✉ Open conversation →','sh-open-thread');open.type='button';open.onclick=()=>shOpenThread(i);d.append(open);
+  if(mode==='received'&&i.status==='new'){const btn=text('button','Mark reviewed','filter');btn.onclick=async()=>{const {error}=await client.from('inquiries').update({status:'reviewed'}).eq('id',i.id).eq('recipient_id',user.id);if(error)alert(error.message);else loadInquiries()};d.append(btn)}
+  out.append(d)
+ }
+ if(shActiveInquiry){const updated=(data||[]).find(x=>x.id===shActiveInquiry.id);if(updated)shActiveInquiry=updated;else{$('shThread').hidden=true;shActiveInquiry=null}}
+}
 async function updateInquiryBadge(){if(!user)return;const {count,error}=await client.from('inquiries').select('id',{count:'exact',head:true}).eq('recipient_id',user.id).eq('status','new');if(error)return;const n=count||0;$('navInboxCount').textContent=n;$('navInboxCount').classList.toggle('hidden',!n);$('hubInboxCount').textContent=n?'('+n+' new)':''}
 const oldGo=go;go=function(id){if(id==='profile')id='studio';oldGo(id);if(id==='studio')showStudio();if(id==='inquiries')loadInquiries()};
 
