@@ -71,7 +71,7 @@ function specialtiesOf(p){const values=[p?.specialty,...(Array.isArray(p?.specia
 function primaryAndSelected(f){const primary=String(f.get('specialty')||'Weddings');return [primary,...[...$('specialtyChoices').querySelectorAll('input:checked')].map(x=>x.value).filter(x=>x!==primary)]}
 function fillForm(p){const f=$('onlineProfileForm');for(const [key,val] of Object.entries(p)){const el=f.elements.namedItem(key);if(!el||key==='specialties')continue;if(el.type==='checkbox')el.checked=!!val;else el.value=val??''}const set=new Set(p.specialties||[]);$('specialtyChoices').querySelectorAll('input').forEach(x=>x.checked=set.has(x.value));}
 function showStudio(){if(!user)return;$('studioProfileSummary').replaceChildren();const p=profile;const summary=$('studioProfileSummary');if(!p){summary.append(text('p','First, add your name, location, main specialty and rate in My Account. Then upload your creative work below.'));return}summary.append(text('h3',p.display_name),text('p',p.role+' · '+p.city+', '+p.state),text('p',specialtiesOf(p).join('  ·  ')));if(!p.is_public)summary.append(text('p','Private profile — turn on Publish in My Account when ready.'))}
-async function updateAuth(){const {data,error}=await client.auth.getUser();const before=user?.id;user=error?null:data.user;if(before!==user?.id){shActiveInquiry=null;const thread=$('shThread');if(thread)thread.hidden=true;}guest.classList.toggle('hidden',!!user);member.classList.toggle('hidden',!user);updateMenu();if(!user){profile=null;v12ThemeLoadedFor=null;$('v12ThemePanel').hidden=true;loadMembership();v111LoadPlan();v111LoadSaved();return}$('signedInAs').textContent=user.email||'Signed in';await loadMembership();await v111LoadPlan();await v111LoadSaved();if(before!==user.id||!v12ThemeLoadedFor||v12ThemeLoadedFor!==user.id){v12ThemeLoadedFor=user.id;await v12LoadMyExperience()}if(before!==user.id||!profile){const q=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(q.error){say('Could not load your profile: '+q.error.message);return}profile=q.data; if(profile)fillForm(profile);showStudio();await loadMyMedia();await updateInquiryBadge()}else{await loadMyMedia()}}
+async function updateAuth(){const {data,error}=await client.auth.getUser();const before=user?.id;user=error?null:data.user;if(before!==user?.id){shActiveInquiry=null;const thread=$('shThread');if(thread)thread.hidden=true;}guest.classList.toggle('hidden',!!user);member.classList.toggle('hidden',!user);updateMenu();shSyncAccountMenu();if(!user){profile=null;v12ThemeLoadedFor=null;$('v12ThemePanel').hidden=true;loadMembership();v111LoadPlan();v111LoadSaved();return}$('signedInAs').textContent=user.email||'Signed in';await loadMembership();await v111LoadPlan();await v111LoadSaved();if(before!==user.id||!v12ThemeLoadedFor||v12ThemeLoadedFor!==user.id){v12ThemeLoadedFor=user.id;await v12LoadMyExperience()}if(before!==user.id||!profile){const q=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(q.error){say('Could not load your profile: '+q.error.message);return}profile=q.data; if(profile)fillForm(profile);showStudio();await loadMyMedia();await updateInquiryBadge()}else{await loadMyMedia()}}
 async function refreshProfile(){if(!user)return;const {data,error}=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(!error){profile=data;if(profile)fillForm(profile);showStudio();await updateInquiryBadge()}}
 const forms=[$('signupForm'),$('loginForm')];
 if(!ready){forms.forEach(f=>f.querySelectorAll('input,button').forEach(x=>x.disabled=true));notice.textContent='Account configuration is missing. Upload config.js containing only your public Supabase project URL and publishable key.';return}
@@ -110,8 +110,9 @@ recoveryBox.style.cssText='position:fixed;inset:0;z-index:99999;background:#0814
 recoveryBox.innerHTML=`<section style="background:#fffaf1;color:#1b2929;padding:clamp(20px,4vw,38px);border-radius:14px;max-width:460px;width:100%;box-shadow:0 18px 60px #0008"><div style="font-size:12px;letter-spacing:2px;color:#916329;font-weight:700">SHUTTERHUNTERS ACCOUNT SECURITY</div><h2 id="shRecoveryTitle" style="margin:14px 0 8px">Create a new password.</h2><p id="shRecoveryFor" style="overflow-wrap:anywhere"></p><form id="shRecoveryForm"><label style="display:block;margin:14px 0 5px" for="shNewPassword">New password</label><input id="shNewPassword" type="password" autocomplete="new-password" minlength="8" required style="width:100%;padding:13px;border:1px solid #b3a591;border-radius:5px"><label style="display:block;margin:14px 0 5px" for="shConfirmPassword">Confirm new password</label><input id="shConfirmPassword" type="password" autocomplete="new-password" minlength="8" required style="width:100%;padding:13px;border:1px solid #b3a591;border-radius:5px"><button id="shRecoverySave" type="submit" style="background:#daa766;color:#152323;border:0;border-radius:5px;padding:13px 17px;font-weight:750;margin-top:18px;cursor:pointer">Save new password</button></form><p id="shRecoveryMessage" role="status" aria-live="polite" style="font-size:14px;margin:14px 0 0"></p></section>`;
 document.body.append(recoveryBox);
 let recoveryAuthorized=false;
+let recoveryUserId=null;
 function showRecovery(email){
-  recoveryAuthorized=true;recoveryBox.style.display='flex';
+  recoveryAuthorized=true;recoveryUserId=pendingRecoverySession?.user?.id||null;recoveryBox.style.display='flex';
   $('shRecoveryFor').textContent=email?'Resetting password for '+email:'Securely update your account password.';
   $('shRecoveryMessage').textContent='Your recovery link is verified. Choose a new password.';
   $('shNewPassword').focus();
@@ -131,10 +132,15 @@ $('shRecoveryForm').addEventListener('submit',async event=>{
   const message=$('shRecoveryMessage');
   if(password.length<8){message.textContent='Use a password with at least 8 characters.';return}
   if(password!==confirmation){message.textContent='Your passwords do not match.';return}
-  const button=$('shRecoverySave');button.disabled=true;message.textContent='Saving your new password…';
+  const button=$('shRecoverySave');button.disabled=true;message.textContent='Checking recovery authorization…';
+  const current=await client.auth.getUser();
+  if(current.error||!recoveryUserId||current.data?.user?.id!==recoveryUserId){
+    recoveryAuthorized=false;message.textContent='Recovery account mismatch. No password was changed. Request a new recovery link in a private browser window.';button.disabled=false;return;
+  }
+  message.textContent='Saving your new password…';
   const {error}=await client.auth.updateUser({password});
   if(error){message.textContent='Could not reset password: '+error.message;button.disabled=false;return}
-  recoveryAuthorized=false;
+  recoveryAuthorized=false;recoveryUserId=null;
   message.textContent='Password changed successfully! You can now sign in using your new password.';
    if(recoveryReturnRequested){const u=new URL(location.href);u.searchParams.delete('sh_reset');u.searchParams.delete('code');history.replaceState({},'',u.pathname+u.search+u.hash);}
   $('shRecoveryForm').style.display='none';
@@ -148,6 +154,22 @@ $('shRecoveryForm').addEventListener('submit',async event=>{
 });
 
 $('signoutBtn').addEventListener('click',async()=>{const {error}=await client.auth.signOut();say(error?error.message:'Signed out.');await updateAuth();go('discover')});
+// Accessible global account menu: avoid hiding logout in the edit-profile form.
+const shAccountActions=$('shAccountActions'),shAccountMenu=$('shAccountMenu'),shAccountToggle=$('shAccountToggle');
+function shCloseAccountMenu(){shAccountMenu.classList.add('hidden');shAccountToggle.setAttribute('aria-expanded','false')}
+function shSyncAccountMenu(){shAccountActions.classList.toggle('hidden',!user);$('shAccountEmail').textContent=user?.email||'';if(!user)shCloseAccountMenu()}
+shAccountToggle.addEventListener('click',()=>{const next=shAccountMenu.classList.toggle('hidden');shAccountToggle.setAttribute('aria-expanded',String(!next))});
+$('shAccountDetails').addEventListener('click',()=>{shCloseAccountMenu();go('account')});
+$('shAccountMembership').addEventListener('click',()=>{shCloseAccountMenu();go('membership')});
+$('shAccountSignout').addEventListener('click',async()=>{
+ const button=$('shAccountSignout');button.disabled=true;$('shAccountMenuStatus').textContent='Signing out…';
+ try{const {error}=await client.auth.signOut();if(error)throw error;shCloseAccountMenu();await updateAuth();go('discover');}
+ catch(error){$('shAccountMenuStatus').textContent='Could not sign out: '+error.message;}
+ finally{button.disabled=false;}
+});
+document.addEventListener('click',event=>{if(!shAccountActions.contains(event.target))shCloseAccountMenu()});
+document.addEventListener('keydown',event=>{if(event.key==='Escape')shCloseAccountMenu()});
+
 $('onlineProfileForm').addEventListener('submit',async e=>{e.preventDefault();if(!user)return say('Sign in first.');const f=new FormData(e.target);const additional=primaryAndSelected(f);const data={id:user.id,display_name:String(f.get('display_name')||'').trim(),city:String(f.get('city')||'').trim(),state:String(f.get('state')||'').trim().toUpperCase(),role:String(f.get('role')),specialty:String(f.get('specialty')),specialties:additional,bio:String(f.get('bio')||''),hourly_rate:f.get('hourly_rate')?Number(f.get('hourly_rate')):null,portfolio_url:validLink(String(f.get('portfolio_url')||'')),instagram_url:validLink(String(f.get('instagram_url')||'')),avatar_url:validLink(String(f.get('avatar_url')||'')),is_public:f.has('is_public'),available_for_second_shooting:f.has('available_for_second_shooting')};if(profile?.cover_url)data.cover_url=profile.cover_url;
  say('Saving your studio…');const {error}=await client.from('profiles').upsert(data,{onConflict:'id'});if(error)return say('Could not save profile: '+error.message+' — did you run the v2 SQL migration?');say('Profile saved! '+(data.is_public?'Anyone can discover your work.':'It remains private.'));await refreshProfile();await loadCreators();});
 // Storage uploads must use per-user folders and Supabase Storage RLS. Never put private files in a public bucket.
@@ -580,15 +602,12 @@ recoveryUiReady=true;
 // Explicit recovery landing route also handles Supabase's PKCE ?code= callback,
 // where some browsers never receive a PASSWORD_RECOVERY notification.
 // The query flag ONLY requests this UI; Supabase must first validate the session.
-if(recoveryReturnRequested){
-  client.auth.getSession().then(async ({data,error})=>{
-    if(error||!data?.session?.access_token)return;
-    const {data:verified,error:verifyError}=await client.auth.getUser();
-    if(verifyError||!verified?.user||verified.user.id!==data.session.user?.id)return;
-    // Show which account is being changed; never use the member profile to infer identity.
-    pendingRecoverySession=data.session;
-    showRecovery(verified.user.email||'');
-  }).catch(err=>console.warn('Password recovery return could not be verified:',err));
+// SECURITY: never treat an existing logged-in session as recovery authority.
+// A ?sh_reset=1 URL by itself is NOT a password reset grant.
+// Only Supabase's PASSWORD_RECOVERY event (above), or a verified incoming
+// recovery access token matching the current session (below), may show the form.
+if(recoveryReturnRequested&&!pendingRecoverySession&&!incomingRecoveryToken){
+  console.info('Recovery return requested; awaiting a verified PASSWORD_RECOVERY event.');
 }
 
 if(pendingRecoverySession?.user)showRecovery(pendingRecoverySession.user.email||'');
