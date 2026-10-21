@@ -75,7 +75,20 @@ async function updateAuth(){const {data,error}=await client.auth.getUser();const
 async function refreshProfile(){if(!user)return;const {data,error}=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(!error){profile=data;if(profile)fillForm(profile);showStudio();await updateInquiryBadge()}}
 const forms=[$('signupForm'),$('loginForm')];
 if(!ready){forms.forEach(f=>f.querySelectorAll('input,button').forEach(x=>x.disabled=true));notice.textContent='Account configuration is missing. Upload config.js containing only your public Supabase project URL and publishable key.';return}
+// Capture the incoming recovery callback BEFORE supabase-js consumes/removes URL tokens.
+const incomingRecoveryHash=new URLSearchParams(window.location.hash.replace(/^#/,''));
+const incomingRecoveryToken=incomingRecoveryHash.get('type')==='recovery'?incomingRecoveryHash.get('access_token'):null;
+let pendingRecoverySession=null;
+let recoveryUiReady=false;
 client=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true}});
+// Register immediately: Supabase may emit PASSWORD_RECOVERY during client initialization.
+client.auth.onAuthStateChange((event,session)=>{
+  if(event==='PASSWORD_RECOVERY'&&session?.user){
+    pendingRecoverySession=session;
+    if(recoveryUiReady)showRecovery(session.user.email||'');
+  }
+  setTimeout(updateAuth,0);
+});
 notice.textContent='Connected to ShutterHunters accounts. Create your studio, upload work, and manage inquiries.';
 forms[0].addEventListener('submit',async e=>{e.preventDefault();say('Creating your account…');const f=new FormData(e.target);const {error}=await client.auth.signUp({email:String(f.get('email')),password:String(f.get('password')),options:{emailRedirectTo:location.origin+location.pathname}});say(error?error.message:'Account requested. Check your inbox for a confirmation email if required.');if(!error)await updateAuth()});
 forms[1].addEventListener('submit',async e=>{e.preventDefault();say('Signing in…');const f=new FormData(e.target);const {error}=await client.auth.signInWithPassword({email:String(f.get('email')),password:String(f.get('password'))});say(error?error.message:'Signed in! Your creator studio is ready.');if(!error){await updateAuth();go('studio')}});
@@ -382,13 +395,20 @@ async function v111ShowFeatured(id){
  out.append(video);$('v111FeaturedCaption').textContent=film.caption||film.title||'Featured film';area.classList.remove('hidden');
 }
 
-client.auth.onAuthStateChange((event,session)=>{
- if(event==='PASSWORD_RECOVERY'){
-   // Do not update the password of whatever account was already signed in.
-   // Recovery can only be authorized after Supabase validates the email link.
-   showRecovery(session?.user?.email||'');
- }
- setTimeout(updateAuth,0);
-});
+// A verified PASSWORD_RECOVERY event may have arrived before the form was created.
+recoveryUiReady=true;
+if(pendingRecoverySession?.user)showRecovery(pendingRecoverySession.user.email||'');
+// Defensive fallback for implicit-flow callbacks: only accept a matching, verified
+// Supabase session from the incoming recovery token, NEVER a preexisting login.
+if(incomingRecoveryToken){
+  client.auth.getSession().then(async({data,error})=>{
+    if(error||!data?.session||data.session.access_token!==incomingRecoveryToken)return;
+    const verified=await client.auth.getUser();
+    if(!verified.error&&verified.data?.user){
+      pendingRecoverySession=data.session;
+      showRecovery(verified.data.user.email||'');
+    }
+  }).catch(()=>{});
+}
 updateAuth();loadCreators();
 })();
