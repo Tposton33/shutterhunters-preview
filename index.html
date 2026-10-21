@@ -221,7 +221,46 @@
 @media(max-width:680px){#publicprofile.v12-pro .public-hero,#publicprofile.v12-studio .public-hero{min-height:560px}.v12-theme-grid{grid-template-columns:1fr}.v12-tour-card{padding:25px}.v12-toolbar button{width:100%}}
 @media(prefers-reduced-motion:reduce){#publicprofile.v12-pro .public-cover,#publicprofile.v12-studio .public-cover{animation:none;transform:none}}
 </style>
-</head><body>
+<style id="v123-mobile-cinema">
+/* V12.3 mobile cinema / accessible media controls. */
+#publicprofile .v5-actions button{color:#fff7e9!important;background:#273b3b!important;border:1.5px solid #d9ae76!important;opacity:1!important;visibility:visible!important;text-shadow:none!important;font-size:clamp(13px,3.3vw,16px)!important;font-weight:750!important;min-height:46px!important;line-height:1.15!important;white-space:normal!important;padding:11px 14px!important;display:inline-flex!important;align-items:center;justify-content:center;gap:4px}
+#publicprofile .v5-actions button:hover,#publicprofile .v5-actions button:focus-visible{background:#bd915f!important;color:#0b191a!important;outline:2px solid #f1dfc5;outline-offset:2px}
+#publicprofile .public-gallery.v5-feed figure{align-self:start;height:auto!important;min-height:0!important;display:flex!important;flex-direction:column!important}
+#publicprofile .public-gallery.v5-feed figure>.v123-film-cover{position:relative;display:block;width:100%;aspect-ratio:16/10;height:auto;background:linear-gradient(132deg,#314444,#1c292a 48%,#6e513b);border:0;color:#fff;cursor:pointer;overflow:hidden;padding:0;flex-shrink:0}
+#publicprofile .v123-film-cover img{width:100%;height:100%;object-fit:cover;display:block}
+#publicprofile .v123-film-cover .v123-fallback{position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:flex-end;flex-direction:column;gap:10px;text-align:left;padding:22px;background:radial-gradient(circle at 70% 18%,#c2a27835,transparent 45%),linear-gradient(155deg,#102a2d,#192325 70%,#79583b)}
+#publicprofile .v123-film-cover img~.v123-fallback{display:none}
+#publicprofile .v123-fallback small{font-size:11px;font-weight:750;letter-spacing:.23em;color:#e9bd82}
+#publicprofile .v123-fallback strong{font-family:Georgia,serif;font-size:clamp(19px,3vw,30px);line-height:1.13;color:#fff2df;max-width:75%}
+#publicprofile .v123-film-cover .v123-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:68px;height:68px;background:#f5e9ddea;border:2px solid white;border-radius:50%;display:grid;place-items:center;color:#142529;font-size:24px;box-shadow:0 8px 36px #0009}
+#publicprofile .v123-film-cover:focus-visible{outline:3px solid #ffd69e;outline-offset:3px}
+#v111FeaturedFilm #v111FeaturedMedia{max-width:100%;min-width:0}
+#v111FeaturedFilm .v123-film-cover{position:relative;display:block;width:100%;aspect-ratio:16/9;overflow:hidden;border:0;border-radius:12px;background:linear-gradient(120deg,#1b3031,#775537);cursor:pointer;color:#fff;padding:0}
+#v111FeaturedFilm .v123-film-cover img{width:100%;height:100%;object-fit:cover}
+#v111FeaturedFilm .v123-film-cover .v123-fallback{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:end;align-items:start;gap:10px;padding:24px;background:linear-gradient(155deg,#173132,#182223 60%,#705037)}
+#v111FeaturedFilm .v123-film-cover img~.v123-fallback{display:none}
+#v111FeaturedFilm .v123-film-cover .v123-play{position:absolute;inset:auto auto 50% 50%;transform:translate(-50%,50%);width:76px;height:76px;border-radius:50%;background:#fff9e8eb;color:#11272a;display:grid;place-items:center;font-size:29px;box-shadow:0 10px 36px #0008}
+#v111FeaturedFilm .v123-feature-video{display:block;width:100%;aspect-ratio:16/9;max-height:80vh;background:#111}
+@media(max-width:700px){
+  body{overflow-x:hidden}#publicprofile{overflow-x:clip}
+  #publicprofile .public-gallery.v5-feed{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:18px!important}
+  #publicprofile .public-gallery.v5-feed figure{grid-column:1/-1!important;width:100%!important;min-width:0!important}
+  #publicprofile .public-gallery.v5-feed figure>.v123-film-cover{aspect-ratio:16/10!important}
+  #publicprofile .v5-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important;padding:8px 13px 16px!important}
+  #publicprofile .v5-actions button{width:100%!important;min-width:0!important;padding:11px 7px!important;font-size:14px!important}
+  #publicprofile .v5-actions button:last-of-type:nth-child(3){grid-column:1/-1}
+  #publicprofile .public-gallery.v5-feed figure figcaption{padding:14px 15px 8px!important;font-size:18px!important;line-height:1.4!important}
+  #publicprofile .chapterheading h2{font-size:clamp(30px,8vw,48px)!important;line-height:1.1!important;overflow-wrap:anywhere}
+  #publicprofile .portfolio-tabs{gap:8px!important}#publicprofile .portfolio-tabs button{font-size:14px!important;padding:11px 12px!important;min-height:44px}
+  #publicprofile .public-content{padding-top:34px!important;padding-bottom:95px!important}
+  #publicprofile .v122-editor-trigger{position:fixed!important;top:auto!important;bottom:calc(92px + env(safe-area-inset-bottom,0px))!important;left:12px!important;width:46px;height:46px;padding:0!important;display:grid!important;place-items:center;z-index:1002!important}
+  #publicprofile .v122-editor-trigger span{display:none!important}
+  #publicprofile .public-topline{flex-direction:column!important;align-items:flex-start!important}
+  #publicprofile .public-topline h1{font-size:clamp(30px,9vw,56px)!important;max-width:100%;overflow-wrap:anywhere}
+  #v111FeaturedFilm{max-width:100%;min-width:0;overflow:hidden}
+}
+@media(prefers-reduced-motion:reduce){#publicprofile .v123-film-cover{transition:none!important}}
+</style></head><body>
 <header class="header"><nav class="shell nav"><a class="brand" href="#" onclick="go('discover');return false">Shutter<span>Hunters.</span></a><div class="navlinks"><button onclick="go('discover')">Discover</button><button onclick="go('jobs')">Find jobs</button><button onclick="go('studio')">My Profile</button><button onclick="go('inquiries')">Inquiries <span id="navInboxCount" class="inbox-count hidden"></span></button><button onclick="go('membership')">Membership</button><button onclick="go('safe')">ShutterSafe</button></div><button class="navcta" onclick="go('studio')">My Profile ↗</button></nav></header>
 <main id="discover"><section class="hero"><img class="heroimage" id="heroimg" alt="Cinematographer capturing a wedding at sunset"><div class="shell heroin"><div class="caps goldtext">A home for the people behind the camera</div><h1>Make art.<br><em>Find your people.</em></h1><p class="lead">Photographers, filmmakers, editors and crews. Find your next collaborator, book your next gig, and make something worth remembering.</p><div class="heroactions"><button class="action" onclick="document.getElementById('creatorsection').scrollIntoView({behavior:'smooth'})">Explore creatives →</button><button class="action secondary" onclick="go('jobs')">Find a gig ↗</button></div><div class="scrolly">NATIONWIDE · EVERY KIND OF CREATIVE</div></div></section>
 <section class="searchstrip"><div class="shell searchbar"><div class="field"><label>Who are you looking for?</label><input id="search" placeholder="Photographer, editor, videographer…" oninput="showCreators()"></div><div class="field"><label>Where?</label><input id="location" placeholder="City or state" oninput="showCreators()"></div><button class="action" onclick="document.getElementById('creatorsection').scrollIntoView({behavior:'smooth'})">Find creatives →</button></div></section>

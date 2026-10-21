@@ -276,7 +276,45 @@ async function openProfile(id){if(!id)return;let p=creatorCache.get(id);if(p){co
 const v103PortfolioTabs=$('v5PortfolioTabs');
 if(v103PortfolioTabs){v103PortfolioTabs.addEventListener('click',event=>{const button=event.target.closest('button[data-v5-filter]');if(!button||!v103PortfolioTabs.contains(button))return;event.preventDefault();v5Filter=button.dataset.v5Filter;renderV5Feed();});}
 
-function renderV5Feed(){const gal=$('pubMedia');gal.replaceChildren();gal.classList.toggle('photos-mode',v5Filter==='image');document.querySelectorAll('[data-v5-filter]').forEach(b=>b.classList.toggle('active',b.dataset.v5Filter===v5Filter));const items=v5Media.filter(m=>v5Filter==='all'||m.media_type===v5Filter);if(v5Media.length&&!items.length)$('pubMediaEmpty').textContent=v5Filter==='video'?'No videos yet. Try Photos or All work.':'No photos yet. Try Videos or All work.';else if(v5Media.length)$('pubMediaEmpty').textContent='';for(const m of items){const figure=document.createElement('figure');figure.className=m.media_type==='video'?'film':'';const media=document.createElement(m.media_type==='video'?'video':'img');media.src=m.media_url;if(m.media_type==='video'){media.controls=!!m.thumbnail_url;media.playsInline=true;media.preload='metadata';if(m.thumbnail_url)media.poster=m.thumbnail_url}else{media.loading='lazy';media.alt=m.title||'Portfolio photo';media.onerror=()=>{media.alt='Photo could not load — please refresh and try again';};}media.ondblclick=()=>expandV5(m);if(m.media_type==='image'){media.onclick=()=>expandV5(m);media.tabIndex=0;media.setAttribute('role','button');media.setAttribute('aria-label','Open photo full size');media.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();expandV5(m)}}}let cover=null;if(m.media_type==='video'&&m.thumbnail_url){media.removeAttribute('src');media.controls=false;media.preload='none';cover=document.createElement('button');cover.className='v7-video-cover';cover.type='button';cover.setAttribute('aria-label','Play '+(m.caption||m.title||'wedding film'));const poster=document.createElement('img');poster.src=m.thumbnail_url;poster.alt='Video cover for '+(m.caption||m.title||'film');poster.loading='lazy';const play=text('span','▶','v7-play');cover.append(poster,play);cover.onclick=()=>expandV5(m);media.replaceWith(cover)}const caption=text('figcaption',m.caption||m.title||'Selected work');const actions=document.createElement('div');actions.className='v5-actions';const like=text('button','♡ Like');const comments=text('button','💬 Comments');const expand=text('button',m.media_type==='image'?'⛶ View photo':'⛶ Expand');const commentArea=document.createElement('div');commentArea.className='v5-comments hidden';expand.onclick=()=>expandV5(m);actions.append(like,comments,expand);figure.append(m.media_type==='video'&&m.thumbnail_url?cover:media,caption,actions,commentArea);gal.append(figure);initV5Social(m,like,comments,commentArea);}}
+// V12.3: render a dedicated cover button even if a creator has not uploaded a thumbnail.
+// When possible, show a frame captured locally from the original video. No DB writes.
+function v123CapturePoster(m, img, fallback){
+  if(!m?.media_url||m.thumbnail_url)return;
+  const video=document.createElement('video');video.crossOrigin='anonymous';video.muted=true;video.playsInline=true;video.preload='auto';
+  let completed=false;const finish=()=>{if(completed)return;completed=true;video.pause();video.removeAttribute('src');video.load()};
+  const timeout=setTimeout(finish,8000);
+  video.addEventListener('loadedmetadata',()=>{try{video.currentTime=Math.min(1,Math.max(.1,(video.duration||1)*.1))}catch{clearTimeout(timeout);finish()}},{once:true});
+  video.addEventListener('seeked',()=>{try{if(completed||!video.videoWidth)return;const canvas=document.createElement('canvas');const scale=Math.min(1,900/video.videoWidth);canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);const url=canvas.toDataURL('image/jpeg',.78);img.src=url;img.hidden=false;if(fallback)fallback.hidden=true;canvas.width=canvas.height=0}catch(e){console.info('Automatic video cover unavailable; showing designed fallback.')}finally{clearTimeout(timeout);finish()}},{once:true});
+  video.addEventListener('error',()=>{clearTimeout(timeout);finish()},{once:true});
+  video.src=m.media_url;
+}
+function v123VideoCover(m,play){
+  const button=document.createElement('button');button.type='button';button.className='v123-film-cover';button.setAttribute('aria-label','Play film: '+(m.caption||m.title||'Selected film'));
+  const fallback=document.createElement('span');fallback.className='v123-fallback';fallback.append(text('small','SHUTTERHUNTERS · FILM'),text('strong',(m.caption||m.title||'Selected film').slice(0,90)));
+  const playIcon=text('span','▶','v123-play');button.append(fallback,playIcon);
+  if(m.thumbnail_url){const poster=document.createElement('img');poster.src=m.thumbnail_url;poster.alt='Film cover';poster.loading='lazy';poster.onerror=()=>{poster.remove();fallback.hidden=false};button.insertBefore(poster,fallback);fallback.hidden=true}
+  else {const poster=document.createElement('img');poster.alt='Video preview';poster.hidden=true;poster.onload=()=>{poster.hidden=false;fallback.hidden=true};button.insertBefore(poster,fallback);v123CapturePoster(m,poster,fallback)}
+  button.onclick=play;return button;
+}
+function renderV5Feed(){
+ const gal=$('pubMedia');gal.replaceChildren();gal.classList.toggle('photos-mode',v5Filter==='image');
+ document.querySelectorAll('[data-v5-filter]').forEach(b=>b.classList.toggle('active',b.dataset.v5Filter===v5Filter));
+ const items=v5Media.filter(m=>v5Filter==='all'||m.media_type===v5Filter);
+ if(v5Media.length&&!items.length)$('pubMediaEmpty').textContent=v5Filter==='video'?'No videos yet. Try Photos or All work.':'No photos yet. Try Videos or All work.';
+ else if(v5Media.length)$('pubMediaEmpty').textContent='';
+ for(const m of items){
+  const figure=document.createElement('figure');figure.className=m.media_type==='video'?'film':'';
+  let media;
+  if(m.media_type==='video'){media=v123VideoCover(m,()=>expandV5(m))}
+  else {media=document.createElement('img');media.src=m.media_url;media.loading='lazy';media.alt=m.title||'Portfolio photo';media.onerror=()=>{media.alt='Photo could not load — please refresh and try again'};media.ondblclick=()=>expandV5(m);media.onclick=()=>expandV5(m);media.tabIndex=0;media.setAttribute('role','button');media.setAttribute('aria-label','Open photo full size');media.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();expandV5(m)}}}
+  const caption=text('figcaption',m.caption||m.title||'Selected work');
+  const actions=document.createElement('div');actions.className='v5-actions';
+  const like=text('button','♡ Like');const comments=text('button','💬 Comments');const expand=text('button',m.media_type==='image'?'⛶ View photo':'⛶ View film');
+  like.type=comments.type=expand.type='button';
+  const commentArea=document.createElement('div');commentArea.className='v5-comments hidden';expand.onclick=()=>expandV5(m);
+  actions.append(like,comments,expand);figure.append(media,caption,actions,commentArea);gal.append(figure);initV5Social(m,like,comments,commentArea);
+ }
+}
 let v8Current=null,v8Portrait=false,v8TouchStart=null,v101PhotoItems=[];
 function v101PhotoNavigate(direction){if(!v8Current||v8Current.media_type!=='image')return;const i=v101PhotoItems.findIndex(x=>x.id===v8Current.id);const next=v101PhotoItems[i+direction];if(next)expandV5(next)}
 function v101SetPhotoControls(){const isPhoto=v8Current?.media_type==='image';const nav=$('v101PhotoNavigation');nav.hidden=!isPhoto||v101PhotoItems.length<2;if(!isPhoto)return;const i=v101PhotoItems.findIndex(x=>x.id===v8Current.id);$('v101PhotoPrev').disabled=i<=0;$('v101PhotoNext').disabled=i<0||i>=v101PhotoItems.length-1;$('v101PhotoCounter').textContent=(i+1)+' / '+v101PhotoItems.length;}
@@ -391,8 +429,8 @@ async function v111ShowFeatured(id){
  const area=$('v111FeaturedFilm'),out=$('v111FeaturedMedia');if(!area||!out)return;area.classList.add('hidden');out.replaceChildren();
  const {data,error}=await client.from('creator_featured_films').select('media_id').eq('user_id',id).maybeSingle();if(error||!data?.media_id)return;
  const film=v5Media.find(m=>m.id===data.media_id&&m.media_type==='video');if(!film)return;
- const video=document.createElement('video');video.src=film.media_url;video.controls=true;video.playsInline=true;video.preload='metadata';if(film.thumbnail_url)video.poster=film.thumbnail_url;
- out.append(video);$('v111FeaturedCaption').textContent=film.caption||film.title||'Featured film';area.classList.remove('hidden');
+ const cover=v123VideoCover(film,()=>{const video=document.createElement('video');video.className='v123-feature-video';video.src=film.media_url;video.controls=true;video.autoplay=true;video.playsInline=true;video.preload='metadata';if(film.thumbnail_url)video.poster=film.thumbnail_url;out.replaceChildren(video);video.play().catch(()=>{})});
+ out.append(cover);$('v111FeaturedCaption').textContent=film.caption||film.title||'Featured film';area.classList.remove('hidden');
 }
 
 let v12ThemeLoadedFor=null;
