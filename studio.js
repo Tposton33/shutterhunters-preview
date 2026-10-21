@@ -76,6 +76,8 @@ async function refreshProfile(){if(!user)return;const {data,error}=await client.
 const forms=[$('signupForm'),$('loginForm')];
 if(!ready){forms.forEach(f=>f.querySelectorAll('input,button').forEach(x=>x.disabled=true));notice.textContent='Account configuration is missing. Upload config.js containing only your public Supabase project URL and publishable key.';return}
 // Capture the incoming recovery callback BEFORE supabase-js consumes/removes URL tokens.
+const incomingRecoveryParams=new URLSearchParams(window.location.search);
+const recoveryReturnRequested=incomingRecoveryParams.get('sh_reset')==='1';
 const incomingRecoveryHash=new URLSearchParams(window.location.hash.replace(/^#/,''));
 const incomingRecoveryToken=incomingRecoveryHash.get('type')==='recovery'?incomingRecoveryHash.get('access_token'):null;
 let pendingRecoverySession=null;
@@ -118,7 +120,7 @@ forgotButton.addEventListener('click',async()=>{
   const email=String(forms[1].elements.namedItem('email').value||'').trim();
   if(!email){say('Enter your email address in the Sign In form, then click Forgot password?');forms[1].elements.namedItem('email').focus();return}
   forgotButton.disabled=true;say('Requesting password recovery email…');
-  const {error}=await client.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+  const {error}=await client.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname+'?sh_reset=1'});
   say(error?'Could not send recovery email: '+error.message:'If that address belongs to an account, a password recovery email will arrive shortly. Open the latest link in an Incognito window.');
   forgotButton.disabled=false;
 });
@@ -134,6 +136,7 @@ $('shRecoveryForm').addEventListener('submit',async event=>{
   if(error){message.textContent='Could not reset password: '+error.message;button.disabled=false;return}
   recoveryAuthorized=false;
   message.textContent='Password changed successfully! You can now sign in using your new password.';
+   if(recoveryReturnRequested){const u=new URL(location.href);u.searchParams.delete('sh_reset');u.searchParams.delete('code');history.replaceState({},'',u.pathname+u.search+u.hash);}
   $('shRecoveryForm').style.display='none';
   const signInBtn=document.createElement('button');signInBtn.type='button';signInBtn.textContent='Return to sign in';
   signInBtn.style.cssText='background:#daa766;color:#152323;border:0;border-radius:5px;padding:13px 17px;font-weight:750;margin-top:18px;cursor:pointer';
@@ -574,6 +577,20 @@ studioTab=function(tab){v121OriginalStudioTab(tab);if(tab==='details')v121LoadDe
 
 // A verified PASSWORD_RECOVERY event may have arrived before the form was created.
 recoveryUiReady=true;
+// Explicit recovery landing route also handles Supabase's PKCE ?code= callback,
+// where some browsers never receive a PASSWORD_RECOVERY notification.
+// The query flag ONLY requests this UI; Supabase must first validate the session.
+if(recoveryReturnRequested){
+  client.auth.getSession().then(async ({data,error})=>{
+    if(error||!data?.session?.access_token)return;
+    const {data:verified,error:verifyError}=await client.auth.getUser();
+    if(verifyError||!verified?.user||verified.user.id!==data.session.user?.id)return;
+    // Show which account is being changed; never use the member profile to infer identity.
+    pendingRecoverySession=data.session;
+    showRecovery(verified.user.email||'');
+  }).catch(err=>console.warn('Password recovery return could not be verified:',err));
+}
+
 if(pendingRecoverySession?.user)showRecovery(pendingRecoverySession.user.email||'');
 // Defensive fallback for implicit-flow callbacks: only accept a matching, verified
 // Supabase session from the incoming recovery token, NEVER a preexisting login.
