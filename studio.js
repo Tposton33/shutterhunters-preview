@@ -293,7 +293,82 @@ function uniqueMyMediaPosts(rows){
   return true;
  });
 }
-async function loadMyMedia(){if(!user||!profile)return;const sequence=++myMediaLoadSequence;const out=$('manageMedia');const {data,error}=await client.from('portfolio_media').select('*').eq('user_id',user.id).order('created_at',{ascending:false}).limit(25);if(sequence!==myMediaLoadSequence)return;out.replaceChildren();if(error){out.append(text('p','Portfolio unavailable: '+error.message));return}const uniquePosts=uniqueMyMediaPosts(data);if(!uniquePosts.length){out.append(text('p','No posts yet — upload your first photo or film above.'));return}await v111LoadFeaturedSelection();if(sequence!==myMediaLoadSequence)return;out.replaceChildren();v101PhotoItems=uniquePosts.filter(m=>m.media_type==='image');for(const m of uniquePosts){const item=document.createElement('div');item.className='gallery-item';const media=document.createElement(m.media_type==='video'?'video':'img');media.src=m.media_url;if(m.media_type==='video'){media.controls=true;media.preload='metadata';media.playsInline=true}else{media.loading='lazy';media.alt=m.caption||m.title||'My portfolio post';media.classList.add('v101-photo-thumb');media.tabIndex=0;media.setAttribute('role','button');media.setAttribute('aria-label','View photo full size');media.onclick=()=>expandV5(m);media.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();expandV5(m)}}};const foot=text('div',m.media_type==='video'?'🎬 Video':'📷 Photo','gallery-foot'),caption=text('div',m.caption||'No caption yet','gallery-caption'),tools=document.createElement('div');tools.className='gallery-tools';const edit=text('button','Edit caption','edit-caption');edit.onclick=async()=>{const value=prompt('Write a description for this post (500 characters maximum):',m.caption||'');if(value===null)return;if(value.length>500)return alert('Descriptions must be 500 characters or fewer.');const {error}=await client.from('portfolio_media').update({caption:value}).eq('id',m.id).eq('user_id',user.id);if(error)return alert('Could not save description: '+error.message);await loadMyMedia()};const del=text('button','Delete');del.onclick=async()=>{if(!confirm('Permanently remove this portfolio item?'))return;const {error:dbErr}=await client.from('portfolio_media').delete().eq('id',m.id).eq('user_id',user.id);if(dbErr)return alert(dbErr.message);await client.storage.from('creator-media').remove([m.storage_path]);await loadMyMedia()};if(m.media_type==='video'){if(m.thumbnail_url)media.poster=m.thumbnail_url;const coverLabel=document.createElement('label');coverLabel.className='v7-cover-editor v104-cover-control';coverLabel.textContent=m.thumbnail_url?'Change video cover':'Add video cover';const coverInput=document.createElement('input');coverInput.type='file';coverInput.accept='image/jpeg,image/png,image/webp';coverInput.setAttribute('aria-label','Choose video cover photo');coverInput.onchange=async()=>{if(!coverInput.files?.[0])return;coverInput.disabled=true;coverLabel.firstChild.textContent='Uploading cover…';try{await saveVideoCover(m.id,coverInput.files[0]);await loadMyMedia()}catch(err){alert(err.message);coverInput.disabled=false;coverLabel.firstChild.textContent='Retry video cover'}};coverLabel.append(coverInput);tools.append(coverLabel)}if(m.media_type==='image'){const view=text('button','⛶ View photo','v101-view-photo');view.type='button';view.onclick=()=>expandV5(m);tools.prepend(view)}if(m.media_type==='video'){const feat=text('button',v111FeaturedId===m.id?'★ Featured on profile':'☆ Feature this film','feature-film-btn');feat.classList.toggle('is-featured',v111FeaturedId===m.id);feat.onclick=()=>v111SetFeatured(m.id);tools.append(feat)}tools.append(edit,del);item.append(media,foot,caption,tools);out.append(item)}}
+function v133EditStory(post){
+ let modal=document.getElementById('v133EditDialog');
+ if(!modal){
+  modal=document.createElement('div');modal.className='v133-editor';modal.id='v133EditDialog';modal.hidden=true;
+  const panel=document.createElement('section');panel.className='v133-editor-panel';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-labelledby','v133EditHeading');
+  const title=text('h2','Edit your story');title.id='v133EditHeading';
+  const helper=text('p','Your full description will be saved to this post. 500 characters maximum.');
+  const form=document.createElement('form');const label=text('label','Photo or film description');label.htmlFor='v133StoryInput';
+  const textarea=document.createElement('textarea');textarea.id='v133StoryInput';textarea.maxLength=500;textarea.required=true;
+  const status=text('p','','subtle');status.id='v133EditStatus';status.setAttribute('role','status');
+  const actions=document.createElement('div');actions.className='v133-editor-actions';
+  const cancel=text('button','Cancel');cancel.type='button';cancel.id='v133EditCancel';
+  const save=text('button','Save changes');save.type='submit';save.id='v133EditSave';
+  actions.append(cancel,save);form.append(label,textarea,status,actions);panel.append(title,helper,form);modal.append(panel);document.body.append(modal);
+  cancel.onclick=()=>{modal.hidden=true;document.body.style.overflow=''};
+  modal.addEventListener('click',e=>{if(e.target===modal)cancel.click()});
+  modal.addEventListener('keydown',e=>{if(e.key==='Escape')cancel.click()});
+ }
+ const input=document.getElementById('v133StoryInput'),status=document.getElementById('v133EditStatus'),save=document.getElementById('v133EditSave');
+ input.value=post.caption||'';status.textContent='';save.disabled=false;modal.hidden=false;document.body.style.overflow='hidden';input.focus();
+ modal.querySelector('form').onsubmit=async event=>{
+  event.preventDefault();if(!user)return;
+  save.disabled=true;status.textContent='Saving…';
+  const value=input.value.trim();
+  const {error}=await client.from('portfolio_media').update({caption:value}).eq('id',post.id).eq('user_id',user.id);
+  if(error){status.textContent='Could not save: '+error.message;save.disabled=false;return}
+  modal.hidden=true;document.body.style.overflow='';await loadMyMedia();
+ };
+}
+async function loadMyMedia(){
+ if(!user||!profile)return;
+ const sequence=++myMediaLoadSequence,out=$('manageMedia');
+ const {data,error}=await client.from('portfolio_media').select('*').eq('user_id',user.id).order('created_at',{ascending:false}).limit(25);
+ if(sequence!==myMediaLoadSequence)return;
+ out.replaceChildren();
+ if(error){out.append(text('p','Portfolio unavailable: '+error.message));return}
+ const posts=uniqueMyMediaPosts(data);
+ if(!posts.length){out.append(text('p','No posts yet — add your first photo or film above.'));return}
+ await v111LoadFeaturedSelection();if(sequence!==myMediaLoadSequence)return;
+ v101PhotoItems=posts.filter(m=>m.media_type==='image');
+ for(const m of posts){
+  const item=document.createElement('article');item.className='gallery-item';
+  const thumb=document.createElement('button');thumb.type='button';thumb.className='v133-thumb';thumb.setAttribute('aria-label','Preview '+(m.caption||m.title||'portfolio work').slice(0,70));
+  const image=document.createElement('img');image.loading='lazy';image.alt=m.media_type==='video'?'Video preview':(m.caption||'Portfolio photo');
+  if(m.media_type==='video'){
+   image.src=m.thumbnail_url||'';
+   if(!m.thumbnail_url){image.style.display='none';thumb.style.background='linear-gradient(135deg,#18292a,#415350)';}
+   const play=text('span','▶','v133-play');thumb.append(image,play);
+  }else{image.src=m.media_url;thumb.append(image)}
+  thumb.onclick=()=>expandV5(m);
+  const info=document.createElement('div');info.className='v133-info';
+  const kind=text('div',m.media_type==='video'?'Film':'Photo','v133-kind');
+  const caption=text('p',m.caption||m.title||'No description yet','v133-caption');
+  caption.title=m.caption||m.title||'';info.append(kind,caption);
+  const tools=document.createElement('div');tools.className='gallery-tools';
+  const edit=text('button','Edit story','v133-primary');edit.type='button';edit.onclick=()=>v133EditStory(m);
+  const preview=text('button','Preview');preview.type='button';preview.onclick=()=>expandV5(m);
+  tools.append(edit,preview);
+  if(m.media_type==='video'){
+    const coverLabel=document.createElement('label');coverLabel.className='v7-cover-editor v104-cover-control';
+    coverLabel.textContent=m.thumbnail_url?'Change video cover':'Add video cover';
+    const coverInput=document.createElement('input');coverInput.type='file';coverInput.accept='image/jpeg,image/png,image/webp';coverInput.setAttribute('aria-label','Select video cover image');
+    coverInput.onchange=async()=>{if(!coverInput.files?.[0])return;coverInput.disabled=true;coverLabel.firstChild.textContent='Uploading cover…';try{await saveVideoCover(m.id,coverInput.files[0]);await loadMyMedia()}catch(e){alert(e.message);coverInput.disabled=false;coverLabel.firstChild.textContent='Retry video cover'}};
+    coverLabel.append(coverInput);tools.append(coverLabel);
+    const featured=text('button',v111FeaturedId===m.id?'★ Featured film':'☆ Feature film','feature-film-btn');featured.type='button';featured.classList.toggle('is-featured',v111FeaturedId===m.id);featured.onclick=()=>v111SetFeatured(m.id);tools.append(featured);
+  }
+  const del=text('button','Delete','v133-delete');del.type='button';del.onclick=async()=>{
+   if(!confirm('Permanently remove this portfolio item? This cannot be undone.'))return;
+   const {error:dbErr}=await client.from('portfolio_media').delete().eq('id',m.id).eq('user_id',user.id);
+   if(dbErr){alert('Could not delete: '+dbErr.message);return}
+   if(m.storage_path)await client.storage.from('creator-media').remove([m.storage_path]);
+   await loadMyMedia();
+  };
+  tools.append(del);item.append(thumb,info,tools);out.append(item);
+ }
+}
 $('viewMine').onclick=()=>openProfile(user?.id);$('hubViewProfile').onclick=()=>openProfile(user?.id);$('hubRefreshPosts').onclick=()=>loadMyMedia();
 async function loadCreators(){const {data,error}=await client.from('profiles').select('id,display_name,city,state,role,specialty,specialties,hourly_rate,avatar_url,cover_url,bio,portfolio_url,instagram_url,available_for_second_shooting,is_public').eq('is_public',true).order('created_at',{ascending:false}).limit(100);if(error){console.warn('Public profiles:',error.message);return}publicList=data||[];for(const p of publicList)creatorCache.set(p.id,p);showCreators=renderCreators;renderCreators();await v111LoadSaved()}
 function renderCreators(){const out=$('creators');out.replaceChildren();const query=$('search').value.trim().toLowerCase(),place=$('location').value.trim().toLowerCase();const matches=publicList.filter(p=>(current==='All'||specialtiesOf(p).includes(current))&&(!query||[p.display_name,p.role,...specialtiesOf(p)].join(' ').toLowerCase().includes(query))&&(!place||[p.city,p.state].join(' ').toLowerCase().includes(place)));if(!matches.length){out.append(text('div','No public creators match your search yet.','empty'));return}for(const p of matches){const item=document.createElement('article');item.className='creator';const image=document.createElement('img');image.alt='Creator portrait';image.loading='lazy';image.src=validLink(p.avatar_url)||IMAGES.creator1;const body=document.createElement('div');body.className='creatorcontent';body.append(text('h3',p.display_name),text('div',p.role+' · '+p.city+', '+p.state,'meta'));const tags=document.createElement('div');tags.className='chipline';for(const s of specialtiesOf(p).slice(0,4))tags.append(text('span',s));body.append(tags);if(p.hourly_rate!==null)body.append(text('div','From $'+p.hourly_rate+'/hr','rates'));const btn=text('button','View profile →','filter');btn.onclick=()=>openProfile(p.id);body.append(btn);const premiumBadge=text('span','','v121-discover-badge');premiumBadge.hidden=true;body.insertBefore(premiumBadge,btn);client.rpc('public_creator_premium_tier',{creator_uuid:p.id}).then(({data})=>{if(data==='pro'||data==='studio'){premiumBadge.textContent=data==='studio'?'✦ STUDIO MEMBER':'♛ PRO CREATOR';premiumBadge.hidden=false}}).catch(()=>{});if(p.id!==user?.id){const save=text('button',v111SavedIds.has(p.id)?'♥ Saved':'♡ Save creator','v111-save-btn');save.type='button';save.onclick=()=>v111ToggleSaved(p.id);body.append(save)}item.append(image,body);out.append(item)}}
