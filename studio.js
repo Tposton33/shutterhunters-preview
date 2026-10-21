@@ -79,6 +79,58 @@ client=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{a
 notice.textContent='Connected to ShutterHunters accounts. Create your studio, upload work, and manage inquiries.';
 forms[0].addEventListener('submit',async e=>{e.preventDefault();say('Creating your account…');const f=new FormData(e.target);const {error}=await client.auth.signUp({email:String(f.get('email')),password:String(f.get('password')),options:{emailRedirectTo:location.origin+location.pathname}});say(error?error.message:'Account requested. Check your inbox for a confirmation email if required.');if(!error)await updateAuth()});
 forms[1].addEventListener('submit',async e=>{e.preventDefault();say('Signing in…');const f=new FormData(e.target);const {error}=await client.auth.signInWithPassword({email:String(f.get('email')),password:String(f.get('password'))});say(error?error.message:'Signed in! Your creator studio is ready.');if(!error){await updateAuth();go('studio')}});
+
+// Password recovery: request via Supabase and show a dedicated password reset form
+// only when a verified PASSWORD_RECOVERY event arrives from supabase-js.
+const forgotButton=document.createElement('button');
+forgotButton.type='button';forgotButton.textContent='Forgot password?';
+forgotButton.className='filter';forgotButton.style.marginTop='12px';
+forms[1].insertAdjacentElement('afterend',forgotButton);
+const recoveryBox=document.createElement('div');
+recoveryBox.id='shPasswordRecovery';
+recoveryBox.setAttribute('role','dialog');
+recoveryBox.setAttribute('aria-modal','true');
+recoveryBox.setAttribute('aria-labelledby','shRecoveryTitle');
+recoveryBox.style.cssText='position:fixed;inset:0;z-index:99999;background:#081416eb;display:none;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
+recoveryBox.innerHTML=`<section style="background:#fffaf1;color:#1b2929;padding:clamp(20px,4vw,38px);border-radius:14px;max-width:460px;width:100%;box-shadow:0 18px 60px #0008"><div style="font-size:12px;letter-spacing:2px;color:#916329;font-weight:700">SHUTTERHUNTERS ACCOUNT SECURITY</div><h2 id="shRecoveryTitle" style="margin:14px 0 8px">Create a new password.</h2><p id="shRecoveryFor" style="overflow-wrap:anywhere"></p><form id="shRecoveryForm"><label style="display:block;margin:14px 0 5px" for="shNewPassword">New password</label><input id="shNewPassword" type="password" autocomplete="new-password" minlength="8" required style="width:100%;padding:13px;border:1px solid #b3a591;border-radius:5px"><label style="display:block;margin:14px 0 5px" for="shConfirmPassword">Confirm new password</label><input id="shConfirmPassword" type="password" autocomplete="new-password" minlength="8" required style="width:100%;padding:13px;border:1px solid #b3a591;border-radius:5px"><button id="shRecoverySave" type="submit" style="background:#daa766;color:#152323;border:0;border-radius:5px;padding:13px 17px;font-weight:750;margin-top:18px;cursor:pointer">Save new password</button></form><p id="shRecoveryMessage" role="status" aria-live="polite" style="font-size:14px;margin:14px 0 0"></p></section>`;
+document.body.append(recoveryBox);
+let recoveryAuthorized=false;
+function showRecovery(email){
+  recoveryAuthorized=true;recoveryBox.style.display='flex';
+  $('shRecoveryFor').textContent=email?'Resetting password for '+email:'Securely update your account password.';
+  $('shRecoveryMessage').textContent='Your recovery link is verified. Choose a new password.';
+  $('shNewPassword').focus();
+}
+forgotButton.addEventListener('click',async()=>{
+  const email=String(forms[1].elements.namedItem('email').value||'').trim();
+  if(!email){say('Enter your email address in the Sign In form, then click Forgot password?');forms[1].elements.namedItem('email').focus();return}
+  forgotButton.disabled=true;say('Requesting password recovery email…');
+  const {error}=await client.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+  say(error?'Could not send recovery email: '+error.message:'If that address belongs to an account, a password recovery email will arrive shortly. Open the latest link in an Incognito window.');
+  forgotButton.disabled=false;
+});
+$('shRecoveryForm').addEventListener('submit',async event=>{
+  event.preventDefault();
+  if(!recoveryAuthorized)return;
+  const password=$('shNewPassword').value, confirmation=$('shConfirmPassword').value;
+  const message=$('shRecoveryMessage');
+  if(password.length<8){message.textContent='Use a password with at least 8 characters.';return}
+  if(password!==confirmation){message.textContent='Your passwords do not match.';return}
+  const button=$('shRecoverySave');button.disabled=true;message.textContent='Saving your new password…';
+  const {error}=await client.auth.updateUser({password});
+  if(error){message.textContent='Could not reset password: '+error.message;button.disabled=false;return}
+  recoveryAuthorized=false;
+  message.textContent='Password changed successfully! You can now sign in using your new password.';
+  $('shRecoveryForm').style.display='none';
+  const signInBtn=document.createElement('button');signInBtn.type='button';signInBtn.textContent='Return to sign in';
+  signInBtn.style.cssText='background:#daa766;color:#152323;border:0;border-radius:5px;padding:13px 17px;font-weight:750;margin-top:18px;cursor:pointer';
+  signInBtn.addEventListener('click',async()=>{
+    await client.auth.signOut();recoveryBox.style.display='none';
+    go('account');await updateAuth();
+  });
+  message.insertAdjacentElement('afterend',signInBtn);
+});
+
 $('signoutBtn').addEventListener('click',async()=>{const {error}=await client.auth.signOut();say(error?error.message:'Signed out.');await updateAuth();go('discover')});
 $('onlineProfileForm').addEventListener('submit',async e=>{e.preventDefault();if(!user)return say('Sign in first.');const f=new FormData(e.target);const additional=primaryAndSelected(f);const data={id:user.id,display_name:String(f.get('display_name')||'').trim(),city:String(f.get('city')||'').trim(),state:String(f.get('state')||'').trim().toUpperCase(),role:String(f.get('role')),specialty:String(f.get('specialty')),specialties:additional,bio:String(f.get('bio')||''),hourly_rate:f.get('hourly_rate')?Number(f.get('hourly_rate')):null,portfolio_url:validLink(String(f.get('portfolio_url')||'')),instagram_url:validLink(String(f.get('instagram_url')||'')),avatar_url:validLink(String(f.get('avatar_url')||'')),is_public:f.has('is_public'),available_for_second_shooting:f.has('available_for_second_shooting')};if(profile?.cover_url)data.cover_url=profile.cover_url;
  say('Saving your studio…');const {error}=await client.from('profiles').upsert(data,{onConflict:'id'});if(error)return say('Could not save profile: '+error.message+' — did you run the v2 SQL migration?');say('Profile saved! '+(data.is_public?'Anyone can discover your work.':'It remains private.'));await refreshProfile();await loadCreators();});
@@ -330,6 +382,13 @@ async function v111ShowFeatured(id){
  out.append(video);$('v111FeaturedCaption').textContent=film.caption||film.title||'Featured film';area.classList.remove('hidden');
 }
 
-client.auth.onAuthStateChange(()=>{setTimeout(updateAuth,0)});
+client.auth.onAuthStateChange((event,session)=>{
+ if(event==='PASSWORD_RECOVERY'){
+   // Do not update the password of whatever account was already signed in.
+   // Recovery can only be authorized after Supabase validates the email link.
+   showRecovery(session?.user?.email||'');
+ }
+ setTimeout(updateAuth,0);
+});
 updateAuth();loadCreators();
 })();
