@@ -553,16 +553,20 @@ function v121EditorChoices(){
    b.onclick=()=>{v121DraftTheme=id;v121PaintTheme(v121OwnerTier,id);v121EditorChoices();$('v121EditorStatus').textContent='Preview only — not published yet.'};wrap.append(b)
  }
 }
+let v132PremiumRenderSerial=0;
 async function v12ApplyPublicProfile(id){
+ const serial=++v132PremiumRenderSerial;
  const root=$('publicprofile');v121PublicId=id;
- root.querySelector('.v12-hero-kicker')?.remove();root.querySelector('.v12-tag')?.remove();root.querySelector('.v121-premium-badge')?.remove();
+ root.querySelectorAll('.v12-hero-kicker, .v12-tag, .v121-premium-badge').forEach(el=>el.remove());
  const editor=$('v121OwnerEditor');v122CloseEditor();$('v122EditorToggle').hidden=true;v121PaintTheme('free','');
  const {data:publicTier,error}=await client.rpc('public_creator_premium_tier',{creator_uuid:id});
  if(error||!['pro','studio'].includes(publicTier))return;
- if(viewed?.id!==id)return;
+ if(viewed?.id!==id || serial!==v132PremiumRenderSerial)return;
  const tier=publicTier;
  const result=await client.from('creator_profile_experiences').select('theme').eq('user_id',id).maybeSingle();
+ if(viewed?.id!==id || serial!==v132PremiumRenderSerial)return;
  const theme=v12ThemeForTier(tier,result.data?.theme);v121PaintTheme(tier,theme);
+ root.querySelectorAll('.v12-hero-kicker, .v12-tag, .v121-premium-badge').forEach(el=>el.remove());
  const heading=$('pubName');
  const badge=text('div',tier==='studio'?'✦ SHUTTERHUNTERS STUDIO MEMBER':'♛ SHUTTERHUNTERS PRO CREATOR','v121-premium-badge');
  const kicker=text('div',tier==='studio'?'A CREATIVE HOUSE FOR BIG IDEAS':theme==='golden'?'CHASING THE GOLDEN LIGHT':theme==='editorial'?'THE ART OF SEEING DIFFERENTLY':'EVERY FRAME TELLS A STORY','v12-hero-kicker');
