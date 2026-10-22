@@ -479,7 +479,38 @@ function shOpenDirectory(){
  shDirectoryLoadPromise=(async()=>{if(!publicList.length)await loadCreators();await shDirectoryResolveTiers()})().finally(()=>{shDirectoryLoadPromise=null});
 }
 window.shOpenDirectory=shOpenDirectory;
-async function loadCreators(){const {data,error}=await client.from('profiles').select('id,display_name,city,state,role,specialty,specialties,hourly_rate,avatar_url,cover_url,bio,portfolio_url,instagram_url,available_for_second_shooting,is_public').eq('is_public',true).order('created_at',{ascending:false}).limit(100);if(error){console.warn('Public profiles:',error.message);return}publicList=data||[];for(const p of publicList)creatorCache.set(p.id,p);showCreators=renderCreators;renderCreators();if(!$('directory')?.classList.contains('hidden')){shDirectoryRender();await shDirectoryResolveTiers()}await v111LoadSaved()}
+
+// Behind the Lens: showcase only media belonging to public, published profiles.
+async function shLensLoad(){
+ const stage=$('shLensStage'); if(!stage||!client)return;
+ const allowed=new Map(publicList.filter(p=>p.is_public===true).map(p=>[p.id,p]));
+ if(!allowed.size)return;
+ const ids=[...allowed.keys()];
+ const {data,error}=await client.from('portfolio_media').select('id,user_id,media_type,media_url,thumbnail_url,caption,title,created_at').in('user_id',ids).order('created_at',{ascending:false}).limit(36);
+ if(error){console.warn('Behind the Lens:',error.message);return}
+ const items=(data||[]).filter(m=>allowed.has(m.user_id)&&['image','video'].includes(m.media_type)&&validLink(m.media_url)).slice(0,5);
+ if(!items.length)return;
+ const grid=document.createElement('div');grid.className='sh-lens-grid';
+ items.forEach((m,index)=>{
+   const creator=allowed.get(m.user_id),card=document.createElement('button');card.type='button';card.className='sh-lens-card';card.setAttribute('aria-label','Preview '+(m.title||'creative project')+' by '+(creator.display_name||'a creator'));
+   const thumb=validLink(m.thumbnail_url)|| (m.media_type==='image'?validLink(m.media_url):null) || validLink(creator.cover_url)||validLink(creator.avatar_url);
+   if(thumb){const img=document.createElement('img');img.src=thumb;img.loading=index===0?'eager':'lazy';img.alt='Portfolio project by '+(creator.display_name||'a ShutterHunters creator');card.append(img)}
+   if(m.media_type==='video'){const play=document.createElement('span');play.className='sh-lens-play';play.textContent='▶ FILM';card.append(play)}
+   const info=document.createElement('span');info.className='sh-lens-copy';const label=document.createElement('span');label.className='sh-lens-label';label.textContent=m.media_type==='video'?'FEATURED FILM':'FEATURED FRAME';const title=document.createElement('strong');title.textContent=(m.caption||m.title||'A story worth sharing').slice(0,90);const credit=document.createElement('small');credit.textContent='BY '+(creator.display_name||'SHUTTERHUNTERS CREATOR');info.append(label,title,credit);card.append(info);
+   card.onclick=()=>shLensOpen(m,creator);grid.append(card);
+ });
+ stage.replaceChildren(grid);
+}
+function shLensOpen(m,creator){
+ const overlay=$('shLensViewer'),container=$('shLensViewerContent');if(!overlay||!container)return;container.replaceChildren();
+ const media=document.createElement(m.media_type==='video'?'video':'img');media.className='sh-lens-viewer-media';media.src=m.media_url;if(m.media_type==='video'){media.controls=true;media.playsInline=true;media.preload='metadata'}else{media.alt=m.caption||m.title||'Creator portfolio photo'}
+ const title=document.createElement('h3');title.textContent=m.title||'Behind the Lens';const desc=document.createElement('p');desc.textContent=m.caption||'';const credit=document.createElement('div');credit.className='sh-lens-credit';credit.append(document.createTextNode('CREATED BY '));const link=document.createElement('button');link.type='button';link.textContent=creator.display_name||'View creator';link.onclick=()=>{shLensClose();openProfile(creator.id)};credit.append(link);container.append(media,title,desc,credit);overlay.hidden=false;document.body.style.overflow='hidden';$('shLensClose')?.focus();
+}
+function shLensClose(){const overlay=$('shLensViewer');if(!overlay)return;overlay.hidden=true;overlay.querySelector('video')?.pause();document.body.style.overflow=''}
+$('shLensClose')?.addEventListener('click',shLensClose);
+$('shLensViewer')?.addEventListener('click',e=>{if(e.target.id==='shLensViewer')shLensClose()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('shLensViewer')?.hidden)shLensClose()});
+async function loadCreators(){const {data,error}=await client.from('profiles').select('id,display_name,city,state,role,specialty,specialties,hourly_rate,avatar_url,cover_url,bio,portfolio_url,instagram_url,available_for_second_shooting,is_public').eq('is_public',true).order('created_at',{ascending:false}).limit(100);if(error){console.warn('Public profiles:',error.message);return}publicList=data||[];for(const p of publicList)creatorCache.set(p.id,p);shLensLoad().catch(e=>console.warn("Behind the Lens unavailable",e));showCreators=renderCreators;renderCreators();if(!$('directory')?.classList.contains('hidden')){shDirectoryRender();await shDirectoryResolveTiers()}await v111LoadSaved()}
 function renderCreators(){const out=$('creators');out.replaceChildren();const query=$('search').value.trim().toLowerCase(),place=$('location').value.trim().toLowerCase();const matches=publicList.filter(p=>(current==='All'||specialtiesOf(p).includes(current))&&(!query||[p.display_name,p.role,...specialtiesOf(p)].join(' ').toLowerCase().includes(query))&&(!place||[p.city,p.state].join(' ').toLowerCase().includes(place)));if(!matches.length){out.append(text('div','No public creators match your search yet.','empty'));return}for(const p of matches){const item=document.createElement('article');item.className='creator';const image=document.createElement('img');image.alt='Creator portrait';image.loading='lazy';image.src=validLink(p.avatar_url)||IMAGES.creator1;const body=document.createElement('div');body.className='creatorcontent';body.append(text('h3',p.display_name),text('div',p.role+' · '+p.city+', '+p.state,'meta'));const tags=document.createElement('div');tags.className='chipline';for(const s of specialtiesOf(p).slice(0,4))tags.append(text('span',s));body.append(tags);if(p.hourly_rate!==null)body.append(text('div','From $'+p.hourly_rate+'/hr','rates'));const btn=text('button','View profile →','filter');btn.onclick=()=>openProfile(p.id);body.append(btn);const premiumBadge=text('span','','v121-discover-badge');premiumBadge.hidden=true;body.insertBefore(premiumBadge,btn);client.rpc('public_creator_premium_tier',{creator_uuid:p.id}).then(({data})=>{if(data==='pro'||data==='studio'){premiumBadge.textContent=data==='studio'?'✦ STUDIO MEMBER':'♛ PRO CREATOR';premiumBadge.hidden=false}}).catch(()=>{});if(p.id!==user?.id){const save=text('button',v111SavedIds.has(p.id)?'♥ Saved':'♡ Save creator','v111-save-btn');save.type='button';save.onclick=()=>v111ToggleSaved(p.id);body.append(save)}item.append(image,body);out.append(item)}}
 async function openProfile(id){
  // Keep old/default theme hidden until current profile data and theme finish loading.
