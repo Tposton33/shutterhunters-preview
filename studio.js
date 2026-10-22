@@ -435,9 +435,11 @@ function shDirectoryRank(tier){return tier==='studio'?2:tier==='pro'?1:0;}
 function shDirectoryRender(){
  const root=$('shDirCards'),status=$('shDirStatus');if(!root||!status)return;
  const q=($('shDirSearch')?.value||'').trim().toLowerCase(),city=($('shDirCity')?.value||'').trim().toLowerCase(),skill=$('shDirSpecialty')?.value||'';
+ const shootDay=$('shDirDate')?.value||'', availableOnly=!!$('shDirAvailableOnly')?.checked;
  const list=publicList.filter(p=>(!q||[p.display_name,p.role,p.bio,...specialtiesOf(p)].join(' ').toLowerCase().includes(q))&&(!city||[p.city,p.state].join(' ').toLowerCase().includes(city))&&(!skill||specialtiesOf(p).includes(skill))).sort((a,b)=>shDirectoryRank(shDirectoryTiers.get(b.id))-shDirectoryRank(shDirectoryTiers.get(a.id))||String(a.display_name||'').localeCompare(String(b.display_name||'')));
  root.replaceChildren();status.textContent=list.length+' public creator'+(list.length===1?'':'s')+' found';
  if(!list.length){root.append(text('div','No creators match these filters. Try a different city or specialty.','sh-dir-loading'));return}
+ if(availableOnly&&!shootDay)status.textContent='Choose a shoot date to filter by availability.';
  for(const p of list){
   const tier=shDirectoryTiers.get(p.id),card=document.createElement('article');card.className='sh-dir-card'+(shDirectoryRank(tier)?' is-featured':'');
   const cover=document.createElement('div');cover.className='sh-dir-cover';if(validLink(p.cover_url)){const img=document.createElement('img');img.src=p.cover_url;img.loading='lazy';img.alt='Portfolio cover for '+(p.display_name||'creator');cover.append(img)}
@@ -447,7 +449,17 @@ function shDirectoryRender(){
   if(p.bio)body.append(text('p',p.bio.length>105?p.bio.slice(0,102)+'…':p.bio));
   const tags=document.createElement('div');tags.className='sh-dir-skills';for(const t of specialtiesOf(p).slice(0,3))tags.append(text('span',t));body.append(tags);
   if(p.hourly_rate!==null&&p.hourly_rate!==undefined)body.append(text('p','Starting at $'+p.hourly_rate+'/hr'));
-  const btn=text('button','View profile →','action');btn.type='button';btn.addEventListener('click',()=>openProfile(p.id));body.append(btn);card.append(cover,avatar,body);root.append(card);
+  const btn=text('button','View profile →','action');btn.type='button';btn.addEventListener('click',()=>openProfile(p.id));if(shootDay){
+   const availability=text('div','📷 Checking date…','sh-dir-date-status is-checking');body.append(availability);
+   const renderToken=shootDay+':'+p.id;availability.dataset.token=renderToken;
+   client.rpc('sh_creator_availability',{p_creator:p.id,p_day:shootDay}).then(({data,error})=>{
+    if(availability.dataset.token!==renderToken||!availability.isConnected)return;
+    if(error){availability.textContent='📷 Availability unavailable';availability.className='sh-dir-date-status is-error';if(availableOnly)card.hidden=true;return}
+    const busy=data==='booked';availability.textContent=busy?'📷 Booked for this date':'📷 Available for this date';availability.className='sh-dir-date-status'+(busy?' is-busy':'');
+    if(availableOnly&&busy)card.hidden=true;
+   }).catch(()=>{availability.textContent='📷 Could not check availability';availability.className='sh-dir-date-status is-error';if(availableOnly)card.hidden=true});
+  }
+  body.append(btn);card.append(cover,avatar,body);root.append(card);
  }
 }
 async function shDirectoryResolveTiers(){
@@ -461,7 +473,7 @@ async function shDirectoryResolveTiers(){
 }
 function shOpenDirectory(){
  const el=$('shDirCards');if(!el)return;
- if(!window.shDirectoryListenersReady){window.shDirectoryListenersReady=true;for(const id of ['shDirSearch','shDirCity','shDirSpecialty'])$(id)?.addEventListener(id==='shDirSpecialty'?'change':'input',shDirectoryRender);$('shDirClear')?.addEventListener('click',()=>{for(const id of ['shDirSearch','shDirCity','shDirSpecialty'])$(id).value='';shDirectoryRender()})}
+ if(!window.shDirectoryListenersReady){window.shDirectoryListenersReady=true;for(const id of ['shDirSearch','shDirCity','shDirSpecialty'])$(id)?.addEventListener(id==='shDirSpecialty'?'change':'input',shDirectoryRender);for(const id of ['shDirDate','shDirAvailableOnly'])$(id)?.addEventListener('change',shDirectoryRender);$('shDirClear')?.addEventListener('click',()=>{for(const id of ['shDirSearch','shDirCity','shDirSpecialty','shDirDate'])$(id).value='';$('shDirAvailableOnly').checked=false;shDirectoryRender()})}
  shDirectoryRender();
  if(shDirectoryLoadPromise)return;
  shDirectoryLoadPromise=(async()=>{if(!publicList.length)await loadCreators();await shDirectoryResolveTiers()})().finally(()=>{shDirectoryLoadPromise=null});
@@ -843,9 +855,9 @@ function shRenderSchedule(){
  const yr=shCal.month.getFullYear(), mo=shCal.month.getMonth(), count=new Date(yr,mo+1,0).getDate();
  for(let i=0;i<new Date(yr,mo,1).getDay();i++)grid.append(document.createElement('div'));
  for(let n=1;n<=count;n++){
-  const day=shDateLocal(new Date(yr,mo,n)),record=shCal.rows.get(day),state=record?.status||'unknown';
+  const day=shDateLocal(new Date(yr,mo,n)),record=shCal.rows.get(day),state=record?.status||'available';
   const b=document.createElement('button');b.type='button';b.className='sh-cal-day sh-day-'+state+(day===$('shCalDate').value?' selected':'');
-  b.setAttribute('aria-label',shDateShort(day)+': '+(state==='booked'?'booked':state==='available'?'available':'not specified'));
+  b.setAttribute('aria-label',shDateShort(day)+': '+(state==='booked'?'booked':state==='available'?'available':'available'));
   b.append(text('strong',String(n)),text('span','📷','sh-cal-emoji'));if(record?.title)b.append(text('small',record.title));
   b.onclick=()=>shChooseDate(day);grid.append(b);
  }
@@ -859,17 +871,8 @@ window.shOpenSchedule=async()=>{if(!user){go('account');return}go('schedule');sh
 $('shCalPrev')?.addEventListener('click',async()=>{shCal.month=new Date(shCal.month.getFullYear(),shCal.month.getMonth()-1,1);await shLoadSchedule()});
 $('shCalNext')?.addEventListener('click',async()=>{shCal.month=new Date(shCal.month.getFullYear(),shCal.month.getMonth()+1,1);await shLoadSchedule()});
 $('shCalForm')?.addEventListener('submit',async e=>{e.preventDefault();if(!user)return shScheduleMessage('Sign in first.');const day=$('shCalDate').value;if(!day)return;shScheduleMessage('Saving…');const record={creator_id:user.id,day,status:$('shCalKind').value,title:$('shCalTitleInput').value.trim(),notes:$('shCalNotes').value.trim()};const {error}=await client.from('creator_schedule_days').upsert(record,{onConflict:'creator_id,day'});if(error)return shScheduleMessage('Could not save: '+error.message);shCal.rows.set(day,record);shRenderSchedule();shScheduleMessage('Saved '+shDateShort(day)+' securely.')});
-$('shCalRemove')?.addEventListener('click',async()=>{if(!user)return;const day=$('shCalDate').value;if(!day)return;const {error}=await client.from('creator_schedule_days').delete().eq('creator_id',user.id).eq('day',day);if(error)return shScheduleMessage('Could not clear: '+error.message);shCal.rows.delete(day);shChooseDate(day);shScheduleMessage('Cleared '+shDateShort(day)+'. Public camera is now gray.')});
-async function shUpdateCamera(creatorId,day){
- const output=$('shProfileCamera');if(!output)return;
- output.className='sh-camera sh-unknown';output.textContent='📷 Checking availability…';
- if(!creatorId||!day){output.textContent='📷 Select a date to check availability';return}
- const request=String(creatorId)+':'+day;output.dataset.request=request;
- const {data,error}=await client.rpc('sh_creator_availability',{p_creator:creatorId,p_day:day});
- if(output.dataset.request!==request)return;
- const state=!error&&['available','booked'].includes(data)?data:'unknown';output.className='sh-camera sh-'+(state==='booked'?'busy':state);output.textContent=state==='available'?'📷 Available for '+shDateShort(day):state==='booked'?'📷 Booked / unavailable '+shDateShort(day):'📷 Availability not specified for '+shDateShort(day);
-}
-$('shProfileDate')?.addEventListener('change',()=>shUpdateCamera(viewed?.id,$('shProfileDate').value));
-const shOriginalOpenProfile=openProfile;
-openProfile=async function(id){await shOriginalOpenProfile(id);if(viewed?.id===id){$('shProfileDate').value='';shUpdateCamera(id,'')}};
+$('shCalRemove')?.addEventListener('click',async()=>{if(!user)return;const day=$('shCalDate').value;if(!day)return;const {error}=await client.from('creator_schedule_days').delete().eq('creator_id',user.id).eq('day',day);if(error)return shScheduleMessage('Could not clear: '+error.message);shCal.rows.delete(day);shChooseDate(day);shScheduleMessage('Cleared '+shDateShort(day)+'. You are available by default.')});
+// Public profiles deliberately do not display a calendar or reveal private booking details.
+// Availability is only queried when a client selects a date in the Creators directory.
+
 })();
