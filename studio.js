@@ -429,7 +429,45 @@ async function loadMyMedia(){
  }
 }
 $('viewMine').onclick=()=>openProfile(user?.id);$('hubViewProfile').onclick=()=>openProfile(user?.id);$('hubRefreshPosts').onclick=()=>loadMyMedia();
-async function loadCreators(){const {data,error}=await client.from('profiles').select('id,display_name,city,state,role,specialty,specialties,hourly_rate,avatar_url,cover_url,bio,portfolio_url,instagram_url,available_for_second_shooting,is_public').eq('is_public',true).order('created_at',{ascending:false}).limit(100);if(error){console.warn('Public profiles:',error.message);return}publicList=data||[];for(const p of publicList)creatorCache.set(p.id,p);showCreators=renderCreators;renderCreators();await v111LoadSaved()}
+const shDirectoryTiers=new Map();
+let shDirectoryLoadPromise=null;
+function shDirectoryRank(tier){return tier==='studio'?2:tier==='pro'?1:0;}
+function shDirectoryRender(){
+ const root=$('shDirCards'),status=$('shDirStatus');if(!root||!status)return;
+ const q=($('shDirSearch')?.value||'').trim().toLowerCase(),city=($('shDirCity')?.value||'').trim().toLowerCase(),skill=$('shDirSpecialty')?.value||'';
+ const list=publicList.filter(p=>(!q||[p.display_name,p.role,p.bio,...specialtiesOf(p)].join(' ').toLowerCase().includes(q))&&(!city||[p.city,p.state].join(' ').toLowerCase().includes(city))&&(!skill||specialtiesOf(p).includes(skill))).sort((a,b)=>shDirectoryRank(shDirectoryTiers.get(b.id))-shDirectoryRank(shDirectoryTiers.get(a.id))||String(a.display_name||'').localeCompare(String(b.display_name||'')));
+ root.replaceChildren();status.textContent=list.length+' public creator'+(list.length===1?'':'s')+' found';
+ if(!list.length){root.append(text('div','No creators match these filters. Try a different city or specialty.','sh-dir-loading'));return}
+ for(const p of list){
+  const tier=shDirectoryTiers.get(p.id),card=document.createElement('article');card.className='sh-dir-card'+(shDirectoryRank(tier)?' is-featured':'');
+  const cover=document.createElement('div');cover.className='sh-dir-cover';if(validLink(p.cover_url)){const img=document.createElement('img');img.src=p.cover_url;img.loading='lazy';img.alt='Portfolio cover for '+(p.display_name||'creator');cover.append(img)}
+  if(shDirectoryRank(tier)){const badge=text('span',tier==='studio'?'✦ STUDIO':'✦ PRO','sh-dir-tag');cover.append(badge)}
+  const avatar=document.createElement('img');avatar.className='sh-dir-avatar';avatar.src=validLink(p.avatar_url)||IMAGES.creator1;avatar.alt=(p.display_name||'Creator')+' portrait';avatar.loading='lazy';
+  const body=document.createElement('div');body.className='sh-dir-cardbody';body.append(text('h3',p.display_name||'Unnamed creator'),text('p',[p.role,p.city,p.state].filter(Boolean).join(' · ')));
+  if(p.bio)body.append(text('p',p.bio.length>105?p.bio.slice(0,102)+'…':p.bio));
+  const tags=document.createElement('div');tags.className='sh-dir-skills';for(const t of specialtiesOf(p).slice(0,3))tags.append(text('span',t));body.append(tags);
+  if(p.hourly_rate!==null&&p.hourly_rate!==undefined)body.append(text('p','Starting at $'+p.hourly_rate+'/hr'));
+  const btn=text('button','View profile →','action');btn.type='button';btn.addEventListener('click',()=>openProfile(p.id));body.append(btn);card.append(cover,avatar,body);root.append(card);
+ }
+}
+async function shDirectoryResolveTiers(){
+ if(!client||!publicList.length)return;
+ // RPC returns only a public tier, not private billing records. Failure defaults to standard placement.
+ const ids=publicList.map(p=>p.id).filter(id=>!shDirectoryTiers.has(id));
+ for(let i=0;i<ids.length;i+=10){
+  await Promise.all(ids.slice(i,i+10).map(async id=>{try{const {data,error}=await client.rpc('public_creator_premium_tier',{creator_uuid:id});shDirectoryTiers.set(id,!error&&['pro','studio'].includes(data)?data:'free')}catch{shDirectoryTiers.set(id,'free')}}));
+ }
+ shDirectoryRender();
+}
+function shOpenDirectory(){
+ const el=$('shDirCards');if(!el)return;
+ if(!window.shDirectoryListenersReady){window.shDirectoryListenersReady=true;for(const id of ['shDirSearch','shDirCity','shDirSpecialty'])$(id)?.addEventListener(id==='shDirSpecialty'?'change':'input',shDirectoryRender);$('shDirClear')?.addEventListener('click',()=>{for(const id of ['shDirSearch','shDirCity','shDirSpecialty'])$(id).value='';shDirectoryRender()})}
+ shDirectoryRender();
+ if(shDirectoryLoadPromise)return;
+ shDirectoryLoadPromise=(async()=>{if(!publicList.length)await loadCreators();await shDirectoryResolveTiers()})().finally(()=>{shDirectoryLoadPromise=null});
+}
+window.shOpenDirectory=shOpenDirectory;
+async function loadCreators(){const {data,error}=await client.from('profiles').select('id,display_name,city,state,role,specialty,specialties,hourly_rate,avatar_url,cover_url,bio,portfolio_url,instagram_url,available_for_second_shooting,is_public').eq('is_public',true).order('created_at',{ascending:false}).limit(100);if(error){console.warn('Public profiles:',error.message);return}publicList=data||[];for(const p of publicList)creatorCache.set(p.id,p);showCreators=renderCreators;renderCreators();if(!$('directory')?.classList.contains('hidden')){shDirectoryRender();await shDirectoryResolveTiers()}await v111LoadSaved()}
 function renderCreators(){const out=$('creators');out.replaceChildren();const query=$('search').value.trim().toLowerCase(),place=$('location').value.trim().toLowerCase();const matches=publicList.filter(p=>(current==='All'||specialtiesOf(p).includes(current))&&(!query||[p.display_name,p.role,...specialtiesOf(p)].join(' ').toLowerCase().includes(query))&&(!place||[p.city,p.state].join(' ').toLowerCase().includes(place)));if(!matches.length){out.append(text('div','No public creators match your search yet.','empty'));return}for(const p of matches){const item=document.createElement('article');item.className='creator';const image=document.createElement('img');image.alt='Creator portrait';image.loading='lazy';image.src=validLink(p.avatar_url)||IMAGES.creator1;const body=document.createElement('div');body.className='creatorcontent';body.append(text('h3',p.display_name),text('div',p.role+' · '+p.city+', '+p.state,'meta'));const tags=document.createElement('div');tags.className='chipline';for(const s of specialtiesOf(p).slice(0,4))tags.append(text('span',s));body.append(tags);if(p.hourly_rate!==null)body.append(text('div','From $'+p.hourly_rate+'/hr','rates'));const btn=text('button','View profile →','filter');btn.onclick=()=>openProfile(p.id);body.append(btn);const premiumBadge=text('span','','v121-discover-badge');premiumBadge.hidden=true;body.insertBefore(premiumBadge,btn);client.rpc('public_creator_premium_tier',{creator_uuid:p.id}).then(({data})=>{if(data==='pro'||data==='studio'){premiumBadge.textContent=data==='studio'?'✦ STUDIO MEMBER':'♛ PRO CREATOR';premiumBadge.hidden=false}}).catch(()=>{});if(p.id!==user?.id){const save=text('button',v111SavedIds.has(p.id)?'♥ Saved':'♡ Save creator','v111-save-btn');save.type='button';save.onclick=()=>v111ToggleSaved(p.id);body.append(save)}item.append(image,body);out.append(item)}}
 async function openProfile(id){
  // Keep old/default theme hidden until current profile data and theme finish loading.
