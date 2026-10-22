@@ -174,8 +174,67 @@ $('onlineProfileForm').addEventListener('submit',async e=>{e.preventDefault();if
  say('Saving your studio…');const {error}=await client.from('profiles').upsert(data,{onConflict:'id'});if(error)return say('Could not save profile: '+error.message+' — did you run the v2 SQL migration?');say('Profile saved! '+(data.is_public?'Anyone can discover your work.':'It remains private.'));await refreshProfile();await loadCreators();});
 // Storage uploads must use per-user folders and Supabase Storage RLS. Never put private files in a public bucket.
 const fileName=(f)=>{const ext=(f.name.split('.').pop()||'bin').toLowerCase();const clean=ext.replace(/[^a-z0-9]/g,'');return crypto.randomUUID()+'.'+clean};
-// Photos are optimized locally. Large videos use resumable TUS uploads when Supabase permits.
-const MAX_VIDEO_BYTES=500*1024*1024;
+// Supabase Free has a fixed 50 MiB per-object limit. Leave headroom for metadata.
+const MAX_VIDEO_BYTES=48*1024*1024;
+async function prepareVideoForUpload(file){
+  if(file.size<=MAX_VIDEO_BYTES)return file;
+  const status=$('postMediaStatus');
+  const report=message=>{if(status)status.textContent=message};
+  if(typeof MediaRecorder==='undefined'||!HTMLCanvasElement.prototype.captureStream){
+    throw Error('This browser cannot compress video locally. Please export an H.264 MP4 under 48 MB or try a browser that supports video recording.');
+  }
+  const candidates=['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  const mime=candidates.find(x=>MediaRecorder.isTypeSupported(x));
+  if(!mime)throw Error('Automatic video compression is not supported on this device. Export an MP4 smaller than 48 MB.');
+  const url=URL.createObjectURL(file),video=document.createElement('video'),canvas=document.createElement('canvas');
+  video.playsInline=true;video.preload='auto';video.crossOrigin='anonymous';
+  let audioCtx=null,paintId=0,stream=null,recorder=null;
+  try{
+    video.src=url;
+    await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Could not read this video. Try MP4 format.')),25000);video.onloadedmetadata=()=>{clearTimeout(timer);resolve()};video.onerror=()=>{clearTimeout(timer);reject(Error('This video format is not supported for compression on this device.'))};video.load()});
+    const duration=video.duration;
+    if(!Number.isFinite(duration)||duration<=0||duration>600)throw Error('Automatic compression supports clips up to 10 minutes.');
+    const scale=Math.min(1,1280/Math.max(1,video.videoWidth),720/Math.max(1,video.videoHeight));
+    canvas.width=Math.max(2,Math.round(video.videoWidth*scale/2)*2);canvas.height=Math.max(2,Math.round(video.videoHeight*scale/2)*2);
+    const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw Error('Video compression needs canvas support.');
+    const fps=24;
+    stream=canvas.captureStream(fps);
+    // Route audio into the recording, not the speakers. Never silently strip soundtrack.
+    const AudioCtx=window.AudioContext||window.webkitAudioContext;
+    if(!AudioCtx)throw Error('This browser cannot preserve audio during local compression. Export MP4 under 48 MB instead.');
+    audioCtx=new AudioCtx();
+    const source=audioCtx.createMediaElementSource(video),destination=audioCtx.createMediaStreamDestination(),silent=audioCtx.createGain();
+    silent.gain.value=0;source.connect(destination);source.connect(silent);silent.connect(audioCtx.destination);
+    const audioTracks=destination.stream.getAudioTracks();
+    if(!audioTracks.length)throw Error('This browser cannot capture the video audio.');
+    audioTracks.forEach(track=>stream.addTrack(track));
+    if(audioCtx.state==='suspended')await audioCtx.resume();
+    // Aim for substantially less than 48 MiB to accommodate variable encoder rates.
+    const targetBits=Math.min(2_400_000,Math.max(340_000,Math.floor((42*1024*1024*8)/duration)-128_000));
+    const chunks=[];
+    recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:targetBits,audioBitsPerSecond:96_000});
+    const recording=new Promise((resolve,reject)=>{recorder.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data)};recorder.onerror=e=>reject(Error(e.error?.message||'Video compression failed.'));recorder.onstop=()=>resolve()});
+    let ended=false;
+    video.onended=()=>{ended=true;if(recorder.state!=='inactive')recorder.stop()};
+    video.onerror=()=>{if(recorder.state!=='inactive')recorder.stop()};
+    const paint=()=>{if(!ended){try{ctx.drawImage(video,0,0,canvas.width,canvas.height)}catch{}paintId=requestAnimationFrame(paint)}};
+    report('Preparing a smaller video. This takes about as long as the clip; keep ShutterHunters open…');
+    recorder.start(1000);paint();
+    try{await video.play()}catch{throw Error('Your browser blocked local video processing. Try exporting an MP4 under 48 MB.')}
+    const progress=setInterval(()=>report('Compressing video: '+Math.min(99,Math.floor(video.currentTime/duration*100))+'% — keep this page open.'),1200);
+    try{await Promise.race([recording,new Promise((_,reject)=>setTimeout(()=>reject(Error('Video compression timed out.')),Math.max(90000,duration*3000)))])}finally{clearInterval(progress)}
+    const outputType=recorder.mimeType||mime;const ext=outputType.includes('mp4')?'mp4':'webm';
+    const blob=new Blob(chunks,{type:outputType.split(';')[0]});
+    if(!blob.size)throw Error('Video compression produced an empty file.');
+    if(blob.size>MAX_VIDEO_BYTES)throw Error('Video is still larger than 48 MB after compression. Trim the clip or export a smaller MP4.');
+    report('Video compressed to '+(blob.size/1048576).toFixed(1)+' MB. Uploading…');
+    return new File([blob],(file.name.replace(/\.[^.]+$/,'')||'video')+'-optimized.'+ext,{type:blob.type});
+  }finally{
+    cancelAnimationFrame(paintId);video.pause();video.removeAttribute('src');video.load();
+    if(recorder?.state==='recording')recorder.stop();stream?.getTracks().forEach(track=>track.stop());
+    if(audioCtx)audioCtx.close().catch(()=>{});URL.revokeObjectURL(url);canvas.width=canvas.height=0;
+  }
+}
 async function optimizePhoto(file){
   if(file.size>150*1024*1024)throw Error('This image is unusually large (over 150 MB). Choose a smaller source file.');
   const objectUrl=URL.createObjectURL(file);
@@ -205,14 +264,14 @@ async function optimizePhoto(file){
 async function uploadToStorage(file,kind){
   if(!user||!profile)throw Error('Save your creator profile first.');
   const isVideo=kind==='video';
-  let prepared=file;
+  let prepared=isVideo?await prepareVideoForUpload(file):file;
   if(!isVideo){
     if(!file.type.startsWith('image/'))throw Error('Choose an image file.');
     prepared=await optimizePhoto(file);
   }
   const mime=(prepared.type||'').toLowerCase();
   if(isVideo&&!['video/mp4','video/webm','video/quicktime'].includes(mime)&&!(/\.(mov|mp4|webm)$/i.test(prepared.name)))throw Error('Use MP4, MOV or WebM video.');
-  if(isVideo&&prepared.size>MAX_VIDEO_BYTES)throw Error('Video exceeds 500 MB. Export a compressed H.264 MP4.');
+  if(isVideo&&prepared.size>MAX_VIDEO_BYTES)throw Error('Video exceeds the current 48 MB upload limit.');
   const path=user.id+'/'+kind+'/'+fileName(prepared);
   if(isVideo){
     if(!window.tus?.Upload)throw Error('Resumable upload library could not load. Check your internet connection and refresh.');
@@ -279,7 +338,7 @@ async function uploadOnePortfolio(file,kind,caption='',coverFile=null){
  if(kind==='video'){try{let cover=coverFile;if(!cover){const frame=await captureVideoCover(file);if(frame)cover=new File([frame],'video-cover.jpg',{type:'image/jpeg'})}if(cover)await saveVideoCover(inserted.id,cover)}catch(e){console.warn('Video published, but cover could not be set:',e);$('postMediaStatus').textContent='Video published, but cover failed: '+e.message+' — add it from My Posts.'}}
  return true;
 }
-$('postMediaForm').addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget,file=$('postMediaFile').files?.[0],kind=String(new FormData(f).get('postType')||'image'),caption=String(new FormData(f).get('caption')||'').trim(),status=$('postMediaStatus'),btn=$('publishPostBtn');if(!file||!caption){status.textContent='Choose a file and add its description.';return}if(kind==='video'&&!file.type.startsWith('video/')&&!/\.(mov|mp4|webm)$/i.test(file.name)){status.textContent='Choose a video for a video post.';return}if(kind==='image'&&!file.type.startsWith('image/')){status.textContent='Choose a photo for a photo post.';return}btn.disabled=true;status.textContent='Uploading your post… Larger videos may take a while. Please keep this page open.';try{await uploadOnePortfolio(file,kind,caption,kind==='video'?$('postVideoCover').files?.[0]:null);status.textContent='Published! View it below or on your public profile.';f.reset();$('postMediaFile').accept='image/jpeg,image/png,image/webp';$('postVideoCoverRow').hidden=true;await loadMyMedia()}catch(err){status.textContent='Could not publish: '+err.message}finally{btn.disabled=false}});
+$('postMediaForm').addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget,file=$('postMediaFile').files?.[0],kind=String(new FormData(f).get('postType')||'image'),caption=String(new FormData(f).get('caption')||'').trim(),status=$('postMediaStatus'),btn=$('publishPostBtn');if(!file||!caption){status.textContent='Choose a file and add its description.';return}if(kind==='video'&&!file.type.startsWith('video/')&&!/\.(mov|mp4|webm)$/i.test(file.name)){status.textContent='Choose a video for a video post.';return}if(kind==='image'&&!file.type.startsWith('image/')){status.textContent='Choose a photo for a photo post.';return}btn.disabled=true;status.textContent=kind==='video'?'Preparing video for upload…':'Uploading your photo…';try{await uploadOnePortfolio(file,kind,caption,kind==='video'?$('postVideoCover').files?.[0]:null);status.textContent='Published! View it below or on your public profile.';f.reset();$('postMediaFile').accept='image/jpeg,image/png,image/webp';$('postVideoCoverRow').hidden=true;await loadMyMedia()}catch(err){status.textContent='Could not publish: '+err.message}finally{btn.disabled=false}});
 // V11.2: render each underlying media asset only once. Never modify portfolio_media rows.
 let myMediaLoadSequence=0;
 function uniqueMyMediaPosts(rows){
