@@ -878,8 +878,21 @@ window.shRequestBooking=async function(jobId,creatorId){
 // or private calendar entries are created. Never use these for a public job or real booking.
 // V13.5.13 — private per-job shortlist and cinematic focus layer.
 let shActiveSpotJob=null;
-function shCloseSpotlight(){const panel=$('shSpotlight');panel?.classList.add('hidden');panel?.classList.remove('shspot-modal');document.body.classList.remove('sh-spot-open')}
-function shOpenSpotlightLayer(){const panel=$('shSpotlight');if(!panel)return;panel.classList.remove('hidden');panel.classList.add('shspot-modal');document.body.classList.add('sh-spot-open');panel.scrollTop=0}
+// Mount Spotlight directly under body, outside the Jobs shell and its clipping/stacking contexts.
+function shCloseSpotlight(){
+ const panel=$('shSpotlight');panel?.classList.add('hidden');panel?.classList.remove('shspot-modal');
+ document.getElementById('shSpotBackdrop')?.remove();document.body.classList.remove('sh-spot-open');
+}
+function shOpenSpotlightLayer(){
+ const panel=$('shSpotlight');if(!panel)return;
+ if(panel.parentElement!==document.body)document.body.appendChild(panel);
+ let backdrop=document.getElementById('shSpotBackdrop');
+ if(!backdrop){backdrop=document.createElement('div');backdrop.id='shSpotBackdrop';backdrop.className='sh-spot-backdrop';backdrop.setAttribute('aria-hidden','true');backdrop.addEventListener('click',shCloseSpotlight);document.body.appendChild(backdrop)}
+ panel.classList.remove('hidden');panel.classList.add('shspot-modal');
+ panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');
+ document.body.classList.add('sh-spot-open');panel.scrollTop=0;
+ requestAnimationFrame(()=>document.getElementById('shSpotClose')?.focus({preventScroll:true}));
+}
 window.shCloseSpotlight=shCloseSpotlight;
 const shCandidateKey=(p,isDemo)=>isDemo?{demo_key:p.name}:{creator_id:p.id};
 // V13.5.13: Fictional Private Test Project candidates are browser-local only.
