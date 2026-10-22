@@ -333,7 +333,7 @@ async function uploadOnePortfolio(file,kind,caption='',coverFile=null){
  const count=(data||[]).filter(m=>m.media_type===kind).length, max=kind==='video'?3:12;
  if(count>=max)throw Error('Your '+(kind==='video'?'3-video':'12-photo')+' limit is reached. Remove an old item to post a new one.');
  const res=await uploadToStorage(file,kind);
- const {data:inserted,error:dbErr}=await client.from('portfolio_media').insert({user_id:user.id,media_type:kind,storage_path:res.path,media_url:res.url,title:file.name.slice(0,100),caption:String(caption||'').trim().slice(0,500),sort_order:count}).select('id').single();
+ const {data:inserted,error:dbErr}=await client.from('portfolio_media').insert({user_id:user.id,media_type:kind,storage_path:res.path,media_url:res.url,title:String(caption||'').trim().slice(0,100),caption:String(caption||'').trim().slice(0,500),sort_order:count}).select('id').single();
  if(dbErr){await client.storage.from('creator-media').remove([res.path]);throw Error(dbErr.message+' — check that PROFILE_HUB_v4.sql has run.');}
  if(kind==='video'){try{let cover=coverFile;if(!cover){const frame=await captureVideoCover(file);if(frame)cover=new File([frame],'video-cover.jpg',{type:'image/jpeg'})}if(cover)await saveVideoCover(inserted.id,cover)}catch(e){console.warn('Video published, but cover could not be set:',e);$('postMediaStatus').textContent='Video published, but cover failed: '+e.message+' — add it from My Posts.'}}
  return true;
@@ -404,8 +404,8 @@ async function loadMyMedia(){
   thumb.onclick=()=>expandV5(m);
   const info=document.createElement('div');info.className='v133-info';
   const kind=text('div',m.media_type==='video'?'Film':'Photo','v133-kind');
-  const caption=text('p',m.caption||m.title||'No description yet','v133-caption');
-  caption.title=m.caption||m.title||'';info.append(kind,caption);
+  const caption=text('p',shMediaDisplayTitle(m),'v133-caption');caption.hidden=!caption.textContent;
+  caption.title=shMediaDisplayTitle(m);info.append(kind,caption);
   const tools=document.createElement('div');tools.className='gallery-tools';
   const edit=text('button','Edit story','v133-primary');edit.type='button';edit.onclick=()=>v133EditStory(m);
   const preview=text('button','Preview');preview.type='button';preview.onclick=()=>expandV5(m);
@@ -480,6 +480,24 @@ function shOpenDirectory(){
 }
 window.shOpenDirectory=shOpenDirectory;
 
+// Public-facing portfolio labels should describe the art, never expose upload filenames.
+function shMediaDisplayTitle(m){
+ // Filenames sometimes entered the caption field in older uploads; clean BOTH fields.
+ const looksLikeFile = value => {
+  const v=String(value||'').trim();
+  if(!v)return false;
+  return /^(?:IMG|MOV|VID|DSC|DSCF|DSCN|PXL|MVIMG|GOPR|DJI|MVI|SCREENSHOT|PHOTO|VIDEO|FILE)[\s_.-]*[\dA-Z_-]+(?:\s*\([^)]*\))?(?:\.(?:mov|mp4|m4v|avi|webm|jpg|jpeg|png|heic|heif|webp))?$/i.test(v)
+   || /^(?:IMG|MOV|VID|DSC|DSCF|DSCN|PXL|MVIMG|GOPR|DJI|MVI|SCREENSHOT|PHOTO|VIDEO|FILE)[\s_.-]*\d/i.test(v)
+   || /^.{1,90}\.(?:mov|mp4|m4v|avi|webm|jpg|jpeg|png|heic|heif|webp)$/i.test(v)
+   || /^(?:[a-f0-9]{8}-){4}[a-f0-9]{12}$/i.test(v);
+ };
+ const caption=String(m?.caption||'').trim();
+ const original=String(m?.title||'').trim();
+ if(caption && !looksLikeFile(caption))return caption;
+ if(original && !looksLikeFile(original))return original;
+ return ''; // Leave art uncluttered when no human-written story is available.
+}
+
 // Behind the Lens: showcase only media belonging to public, published profiles.
 async function shLensLoad(){
  const stage=$('shLensStage'); if(!stage||!client)return;
@@ -492,7 +510,7 @@ async function shLensLoad(){
  if(!items.length)return;
  const grid=document.createElement('div');grid.className='sh-lens-grid';
  items.forEach((m,index)=>{
-   const creator=allowed.get(m.user_id),card=document.createElement('button');card.type='button';card.className='sh-lens-card';card.setAttribute('aria-label','Preview '+(m.title||'creative project')+' by '+(creator.display_name||'a creator'));
+   const creator=allowed.get(m.user_id),card=document.createElement('button');card.type='button';card.className='sh-lens-card';card.setAttribute('aria-label','Preview '+shMediaDisplayTitle(m)+' by '+(creator.display_name||'a creator'));
    const thumb=validLink(m.thumbnail_url)|| (m.media_type==='image'?validLink(m.media_url):null) || validLink(creator.cover_url)||validLink(creator.avatar_url);
    if(m.media_type==='video'){
      const vid=document.createElement('video');vid.src=m.media_url;vid.muted=true;vid.defaultMuted=true;vid.autoplay=true;vid.loop=true;vid.playsInline=true;vid.preload='auto';vid.setAttribute('muted','');vid.setAttribute('playsinline','');vid.setAttribute('webkit-playsinline','');vid.setAttribute('aria-hidden','true');vid.tabIndex=-1;
@@ -500,8 +518,8 @@ async function shLensLoad(){
      vid.addEventListener('loadeddata',()=>{if(!document.hidden && !window.matchMedia('(prefers-reduced-motion: reduce)').matches && !navigator.connection?.saveData)vid.play().catch(()=>{});},{once:true});
      card.append(vid);
    }else if(thumb){const img=document.createElement('img');img.src=thumb;img.loading=index===0?'eager':'lazy';img.alt='Portfolio project by '+(creator.display_name||'a ShutterHunters creator');card.append(img)}
-   if(m.media_type==='video'){const play=document.createElement('span');play.className='sh-lens-play';play.textContent='▶ FILM';card.append(play)}
-   const info=document.createElement('span');info.className='sh-lens-copy';const label=document.createElement('span');label.className='sh-lens-label';label.textContent=m.media_type==='video'?'FEATURED FILM':'FEATURED FRAME';const title=document.createElement('strong');const rawTitle=(m.title||m.caption||'A story worth sharing').trim();title.textContent=rawTitle.length>56?rawTitle.slice(0,53).trimEnd()+'…':rawTitle;const credit=document.createElement('small');credit.textContent='BY '+(creator.display_name||'SHUTTERHUNTERS CREATOR');info.append(label,title,credit);card.append(info);
+   if(m.media_type==='video'){const play=document.createElement('span');play.className='sh-lens-play';play.textContent='▶';card.append(play)}
+   const info=document.createElement('span');info.className='sh-lens-copy';const label=document.createElement('span');label.className='sh-lens-label';label.textContent='';label.hidden=true;const title=document.createElement('strong');const rawTitle=shMediaDisplayTitle(m);title.textContent=rawTitle.length>56?rawTitle.slice(0,53).trimEnd()+'…':rawTitle;title.hidden=!rawTitle;const credit=document.createElement('small');credit.textContent='BY '+(creator.display_name||'SHUTTERHUNTERS CREATOR');info.append(label,title,credit);card.append(info);
    card.onclick=()=>shLensOpen(m,creator);grid.append(card);
  });
  stage.replaceChildren(grid);
@@ -516,7 +534,7 @@ async function shLensLoad(){
 function shLensOpen(m,creator){
  const overlay=$('shLensViewer'),container=$('shLensViewerContent');if(!overlay||!container)return;container.replaceChildren();
  const media=document.createElement(m.media_type==='video'?'video':'img');media.className='sh-lens-viewer-media';media.src=m.media_url;if(m.media_type==='video'){media.controls=true;media.playsInline=true;media.preload='metadata';media.autoplay=true;media.muted=false;media.volume=1}else{media.alt=m.caption||m.title||'Creator portfolio photo'}
- const title=document.createElement('h3');title.textContent=m.title||'Behind the Lens';const desc=document.createElement('p');desc.textContent=m.caption||'';const credit=document.createElement('div');credit.className='sh-lens-credit';credit.append(document.createTextNode('CREATED BY '));const link=document.createElement('button');link.type='button';link.textContent=creator.display_name||'View creator';link.onclick=()=>{shLensClose();openProfile(creator.id)};credit.append(link);container.append(media,title,desc,credit);overlay.hidden=false;document.body.style.overflow='hidden';if(m.media_type==='video')media.play().catch(()=>{});$('shLensClose')?.focus();
+ const title=document.createElement('h3');title.textContent=shMediaDisplayTitle(m);title.hidden=!title.textContent;const desc=document.createElement('p');desc.textContent='';desc.hidden=true;const credit=document.createElement('div');credit.className='sh-lens-credit';credit.append(document.createTextNode('CREATED BY '));const link=document.createElement('button');link.type='button';link.textContent=creator.display_name||'View creator';link.onclick=()=>{shLensClose();openProfile(creator.id)};credit.append(link);container.append(media,title,desc,credit);overlay.hidden=false;document.body.style.overflow='hidden';if(m.media_type==='video')media.play().catch(()=>{});$('shLensClose')?.focus();
 }
 function shLensClose(){const overlay=$('shLensViewer');if(!overlay)return;overlay.hidden=true;overlay.querySelector('video')?.pause();document.body.style.overflow=''}
 $('shLensClose')?.addEventListener('click',shLensClose);
@@ -567,8 +585,8 @@ function renderV5Feed(){
   if(m.media_type==='video'){media=v123VideoCover(m,()=>expandV5(m))}
   else {media=document.createElement('img');media.src=m.media_url;media.loading='lazy';media.alt=m.title||'Portfolio photo';media.onerror=()=>{media.alt='Photo could not load — please refresh and try again'};media.ondblclick=()=>expandV5(m);media.onclick=()=>expandV5(m);media.tabIndex=0;media.setAttribute('role','button');media.setAttribute('aria-label','Open photo full size');media.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();expandV5(m)}}}
   const caption=text('figcaption','','');
-  const fullCaption=String(m.caption||m.title||'Selected work');
-  const captionBody=text('span',fullCaption,'sh-caption');caption.append(captionBody);
+  const fullCaption=shMediaDisplayTitle(m);
+  const captionBody=text('span',fullCaption,'sh-caption');if(fullCaption)caption.append(captionBody);else caption.hidden=true;
   if(fullCaption.length>170){
     let expanded=false;const toggle=text('button','Read full story ↓','sh-caption-toggle');toggle.type='button';
     const update=()=>{captionBody.textContent=expanded?fullCaption:fullCaption.slice(0,170).trimEnd()+'…';toggle.textContent=expanded?'Show less ↑':'Read full story ↓';toggle.setAttribute('aria-expanded',String(expanded))};
@@ -619,8 +637,8 @@ function expandV5(m){
     });
   }else{el.alt=m.title||'Portfolio photo'}
   area.append(el);
-  $('v5ExpandedCaption').textContent=m.caption||m.title||'';
-  $('v8PlayerTitle').textContent=m.title||'Selected work';
+  $('v5ExpandedCaption').textContent=shMediaDisplayTitle(m);
+  $('v8PlayerTitle').textContent=shMediaDisplayTitle(m);
   root.hidden=false;document.body.style.overflow='hidden';v8NavState();v101SetPhotoControls();
 }
 function closeV5(){
@@ -749,7 +767,7 @@ async function v111ShowFeatured(id){
  const {data,error}=await client.from('creator_featured_films').select('media_id').eq('user_id',id).maybeSingle();if(error||!data?.media_id)return;
  const film=v5Media.find(m=>m.id===data.media_id&&m.media_type==='video');if(!film)return;
  const cover=v123VideoCover(film,()=>{const video=document.createElement('video');video.className='v123-feature-video';video.src=film.media_url;video.controls=true;video.autoplay=true;video.playsInline=true;video.preload='metadata';if(film.thumbnail_url)video.poster=film.thumbnail_url;out.replaceChildren(video);video.play().catch(()=>{})});
- out.append(cover);$('v111FeaturedCaption').textContent=film.caption||film.title||'Featured film';area.classList.remove('hidden');
+ out.append(cover);$('v111FeaturedCaption').textContent=shMediaDisplayTitle(film);$('v111FeaturedCaption').hidden=!$('v111FeaturedCaption').textContent;area.classList.remove('hidden');
 }
 
 let v12ThemeLoadedFor=null;
@@ -835,7 +853,7 @@ async function v121LoadDetailsMedia(){
  for(const m of rows){const card=document.createElement('article');card.className='v121-mini';
    const media=document.createElement(m.media_type==='video'?'video':'img');media.src=m.media_type==='video'?(m.media_url||''):(m.media_url||'');
    if(m.media_type==='video'){media.preload='none';media.controls=true;if(m.thumbnail_url)media.poster=m.thumbnail_url}else{media.loading='lazy';media.alt=m.caption||'Portfolio photo'}
-   card.append(media,text('p',(m.media_type==='video'?'🎬 ':'📷 ')+(m.caption||m.title||'Untitled')));out.append(card)
+   const display=shMediaDisplayTitle(m);card.append(media);if(display)card.append(text('p',display));out.append(card)
  }
 }
 const v121OriginalStudioTab=studioTab;
