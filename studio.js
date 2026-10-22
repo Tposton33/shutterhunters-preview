@@ -874,21 +874,57 @@ window.shRequestBooking=async function(jobId,creatorId){
  if(note)note.textContent='Booking request sent! The creator must accept before the job is closed or their date becomes booked.';
  await window.shLoadBookings();
 };
+// Fictional UI-only Spotlight demonstration cards. No auth accounts, database rows, subscriptions,
+// or private calendar entries are created. Never use these for a public job or real booking.
+const shSpotlightDemoCreators = Object.freeze([
+ {name:'Golden Hour Films',city:'Sacramento',specialty:['Weddings','Events'],tier:'studio',color:'#b98b59',initials:'GH',status:'available',bio:'Documentary-style wedding films and cinematic storytelling. Fictional demonstration profile.'},
+ {name:'North Valley Creative',city:'Elk Grove',specialty:['Weddings','Events'],tier:'studio',color:'#647e75',initials:'NV',status:'available',bio:'Wedding films, candid moments and heartfelt edits. Fictional demonstration profile.'},
+ {name:'West Coast Visuals',city:'Sacramento',specialty:['Weddings','Real Estate'],tier:'pro',color:'#63758b',initials:'WC',status:'available',bio:'Wedding and portrait imagery with an editorial touch. Fictional demonstration profile.'},
+ {name:'Wildframe Productions',city:'Roseville',specialty:['Weddings','Commercial'],tier:'pro',color:'#816a6a',initials:'WF',status:'booked',bio:'Event coverage and commercial production. Fictional demonstration profile.'},
+ {name:'Evergreen Portraits',city:'Davis',specialty:['Weddings','Events'],tier:'free',color:'#86876b',initials:'EP',status:'available',bio:'Natural-light portraits and intimate ceremonies. Fictional demonstration profile.'}
+]);
+function shRenderSpotlightDemo(strip,note,job){
+ const spec=String(job.specialty||'').toLowerCase();
+ const demo=shSpotlightDemoCreators.filter(d=>!spec||d.specialty.some(s=>s.toLowerCase()===spec));
+ const ranked=[...demo].sort((a,b)=>({studio:0,pro:1,free:2}[a.tier]-{studio:0,pro:1,free:2}[b.tier]));
+ note.textContent='DEMO PREVIEW · '+ranked.length+' fictional creator cards · Booking and payments disabled. No real accounts created.';
+ for(const d of ranked){
+  const card=shBookingText('article',null,'shspot-card shspot-demo-card');
+  const cover=shBookingText('div',null,'shspot-demo-cover');cover.style.background='radial-gradient(circle at 78% 20%, '+d.color+', #152426 77%)';
+  const initials=shBookingText('span',d.initials,'shspot-demo-monogram');cover.append(initials,shBookingText('span','FICTIONAL DEMO','shspot-demo-stamp'));
+  const body=shBookingText('div',null,'shspot-body');
+  body.append(shBookingText('strong',d.name),shBookingText('small',d.city+' · '+d.specialty.join(', ')),shBookingText('small',d.tier==='studio'?'✦ STUDIO · Priority demo':d.tier==='pro'?'✦ PRO · Priority demo':'FREE · Demo profile'));
+  body.append(shBookingText('small',d.status==='booked'?'📷 Booked on example date':'📷 Available on example date',d.status==='booked'?'sh-demo-busy':'sh-available'));
+  const more=shBookingText('button','View demo portfolio ↗','filter');more.type='button';more.onclick=()=>{
+   const existing=body.querySelector('.sh-demo-details');if(existing){existing.remove();more.textContent='View demo portfolio ↗';return}
+   const details=shBookingText('div',null,'sh-demo-details');details.append(shBookingText('p',d.bio),shBookingText('small','Preview only. A real creator profile would show their uploaded portfolio, reviews and booking options. No booking can be requested here.'));
+   body.append(details);more.textContent='Hide demo details';
+  };
+  body.append(more,shBookingText('small','Demonstration only · Not hireable','shspot-demo-notice'));card.append(cover,body);strip.append(card);
+ }
+}
 window.shShowSpotlight=async function(job){
  const panel=$('shSpotlight'),strip=$('shSpotCards'),note=$('shSpotStatus');if(!panel||!strip||!job?.id)return;const isPrivateTest=job.__privateTest===true;
  panel.classList.remove('hidden');panel.scrollIntoView({behavior:'smooth',block:'start'});strip.replaceChildren();note.textContent='Finding creators who match the date and specialty…';
- $('shSpotIntro').textContent=(isPrivateTest?'PRIVATE TEST · Preview only · No booking requests. For ':'For ')+job.title+' · '+job.location+(job.event_date?' · '+shDateShort(job.event_date):'')+' · Studio priority among qualified creators.';
+ $('shSpotIntro').textContent=(isPrivateTest?'PRIVATE TEST · Fictional showcase preview · No bookings. For ':'For ')+job.title+' · '+job.location+(job.event_date?' · '+shDateShort(job.event_date):'')+' · Studio priority among qualified creators.';
+ // Private tests are a UI playground; never insert demo profiles into Supabase or expose them in live jobs.
+ if(isPrivateTest){
+  shRenderSpotlightDemo(strip,note,job);
+  $('shSpotExplore').textContent='Explore real creators ↗';
+  $('shSpotExplore').onclick=()=>{go('directory');$('shDirSpecialty').value=job.specialty||'';if(job.event_date){$('shDirDate').value=job.event_date;$('shDirAvailableOnly').checked=true}shOpenDirectory()};
+  $('shSpotDismiss').onclick=()=>panel.classList.add('hidden');return;
+ }
+ $('shSpotExplore').textContent='Explore all creators ↗';
  if(!publicList.length)await loadCreators();await shDirectoryResolveTiers();
  const spec=String(job.specialty||'').toLowerCase(),city=String(job.location||'').toLowerCase().split(',')[0].trim();
  let possible=publicList.filter(p=>p.id!==job.client_id&&(!spec||specialtiesOf(p).some(s=>s.toLowerCase()===spec)));
- // Do not invent five matches; require publicly listed specialist profiles.
  const scores=await Promise.all(possible.map(async p=>{let busy=false;if(job.event_date){const {data,error}=await client.rpc('sh_creator_availability',{p_creator:p.id,p_day:job.event_date});if(error)return null;busy=data==='booked'}if(busy)return null;const tier=shDirectoryTiers.get(p.id)||'free';const nearby=city&&[p.city,p.state].filter(Boolean).join(' ').toLowerCase().includes(city);return {p,tier,score:(nearby?100:0)+(tier==='studio'?20:tier==='pro'?10:0)}}));
  const best=scores.filter(Boolean).sort((a,b)=>b.score-a.score).slice(0,5);strip.replaceChildren();
  if(!best.length){note.textContent='No available matching creators found yet. Try Explore All Creators.';return}
- note.textContent=(isPrivateTest?'Private test · No bookings can be sent · ':'')+best.length+' available creator'+(best.length===1?'':'s')+' matched · Priority placement reflects membership.';
+ note.textContent=best.length+' available creator'+(best.length===1?'':'s')+' matched · Priority placement reflects membership.';
  for(const {p,tier} of best){const card=shBookingText('article',null,'shspot-card'),photo=document.createElement('img');photo.src=validLink(p.cover_url)||validLink(p.avatar_url)||IMAGES.creator1;photo.alt='Portfolio image for '+(p.display_name||'creator');photo.loading='lazy';const body=shBookingText('div',null,'shspot-body');
  body.append(shBookingText('strong',p.display_name||'Creative professional'),shBookingText('small',[p.city,p.state,specialtiesOf(p).slice(0,2).join(', ')].filter(Boolean).join(' · ')),shBookingText('small',tier==='studio'?'✦ Studio · Priority placement':tier==='pro'?'✦ Pro · Priority placement':'Creator'),shBookingText('small',job.event_date?'📷 Available for selected date':'📷 Check schedule with creator','sh-available'));
- const open=shBookingText('button','View portfolio ↗','filter');open.onclick=()=>openProfile(p.id);if(!isPrivateTest){const req=shBookingText('button','Request booking','action');req.onclick=()=>window.shRequestBooking(job.id,p.id);body.append(open,req)}else{body.append(shBookingText('small','Private preview · Request booking disabled','sh-available'))}body.append(open);card.append(photo,body);strip.append(card)
+ const open=shBookingText('button','View portfolio ↗','filter');open.onclick=()=>openProfile(p.id);const req=shBookingText('button','Request booking','action');req.onclick=()=>window.shRequestBooking(job.id,p.id);body.append(open,req);card.append(photo,body);strip.append(card)
  }
  $('shSpotExplore').onclick=()=>{go('directory');$('shDirSpecialty').value=job.specialty||'';if(job.event_date){$('shDirDate').value=job.event_date;$('shDirAvailableOnly').checked=true}shOpenDirectory()};
  $('shSpotDismiss').onclick=()=>panel.classList.add('hidden');
