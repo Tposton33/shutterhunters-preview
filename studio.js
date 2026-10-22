@@ -876,17 +876,48 @@ window.shRequestBooking=async function(jobId,creatorId){
 };
 // Fictional UI-only Spotlight demonstration cards. No auth accounts, database rows, subscriptions,
 // or private calendar entries are created. Never use these for a public job or real booking.
-// V13.5.12 — private per-job shortlist and cinematic focus layer.
+// V13.5.13 — private per-job shortlist and cinematic focus layer.
 let shActiveSpotJob=null;
 function shCloseSpotlight(){const panel=$('shSpotlight');panel?.classList.add('hidden');panel?.classList.remove('shspot-modal');document.body.classList.remove('sh-spot-open')}
 function shOpenSpotlightLayer(){const panel=$('shSpotlight');if(!panel)return;panel.classList.remove('hidden');panel.classList.add('shspot-modal');document.body.classList.add('sh-spot-open');panel.scrollTop=0}
 window.shCloseSpotlight=shCloseSpotlight;
 const shCandidateKey=(p,isDemo)=>isDemo?{demo_key:p.name}:{creator_id:p.id};
-async function shReadShortlist(job){const viewer=await shGetViewer();if(!viewer||!job)return[];const query=client.from('sh_job_shortlists').select('id,creator_id,demo_key,created_at').eq('owner_id',viewer.id).eq(job.__privateTest?'private_test_id':'job_id',job.id).order('created_at',{ascending:false});const {data,error}=await query;if(error){console.warn('Shortlist load:',error.message);return []}return data||[]}
-async function shToggleCandidateSave(job,p,isDemo,button){const viewer=await shGetViewer();const status=$('shSpotStatus');if(!viewer){if(status)status.textContent='Sign in to save candidates.';return}button.disabled=true;const key=shCandidateKey(p,isDemo),jobColumn=job.__privateTest?'private_test_id':'job_id';const existing=await shReadShortlist(job);const match=existing.find(x=>isDemo?x.demo_key===p.name:x.creator_id===p.id);let error;if(match){({error}=await client.from('sh_job_shortlists').delete().eq('id',match.id).eq('owner_id',viewer.id))}else{({error}=await client.from('sh_job_shortlists').insert({owner_id:viewer.id,[jobColumn]:job.id,...key}))}button.disabled=false;if(error){if(status)status.textContent='Could not save: '+error.message+' (install V13_5_12_JOB_SHORTLIST.sql)';return}button.setAttribute('aria-pressed',String(!match));button.textContent=match?'♡ Save to potential candidates':'♥ Saved for this job';if(status)status.textContent=match?'Removed from this job shortlist.':'Saved! You can review this candidate under this job.';}
-function shSaveButton(job,p,isDemo){const btn=shBookingText('button','♡ Save to potential candidates','sh-save-candidate');btn.type='button';btn.setAttribute('aria-pressed','false');btn.onclick=()=>shToggleCandidateSave(job,p,isDemo,btn);shReadShortlist(job).then(items=>{if(!btn.isConnected)return;const saved=items.some(x=>isDemo?x.demo_key===p.name:x.creator_id===p.id);btn.textContent=saved?'♥ Saved for this job':'♡ Save to potential candidates';btn.setAttribute('aria-pressed',String(saved))});return btn}
-window.shShowJobShortlist=async function(job){if(!job)return;shCloseSpotlight();const area=$('shJobShortlistArea'),list=$('shJobShortlistList'),msg=$('shJobShortlistStatus');if(!area||!list)return;area.classList.remove('hidden');list.replaceChildren();$('shJobShortlistHeading').textContent='Potential candidates · '+job.title;msg.textContent='Loading your saved candidates…';const saved=await shReadShortlist(job);msg.textContent=saved.length+' saved candidate(s) for this job · Only visible to you.';
-for(const entry of saved){let p=entry.demo_key?shSpotlightDemoCreators.find(x=>x.name===entry.demo_key):publicList.find(x=>x.id===entry.creator_id);if(!p&&entry.creator_id){if(!publicList.length)await loadCreators();p=publicList.find(x=>x.id===entry.creator_id)}const card=shBookingText('article',null,'sh-shortlist-person'),name=p?(p.name||p.display_name):'Creator profile unavailable';card.append(shBookingText('strong',name),shBookingText('span',entry.demo_key?'FICTIONAL DEMO · Preview only':[p?.city,p?.state].filter(Boolean).join(', ')));if(entry.creator_id&&p){const open=shBookingText('button','View profile ↗','filter');open.onclick=()=>openProfile(p.id);card.append(open)}const remove=shBookingText('button','Remove from shortlist','filter');remove.onclick=async()=>{const viewer=await shGetViewer();if(!viewer)return;const {error}=await client.from('sh_job_shortlists').delete().eq('id',entry.id).eq('owner_id',viewer.id);if(error){msg.textContent=error.message;return}window.shShowJobShortlist(job)};card.append(remove);list.append(card)}
+// V13.5.13: Fictional Private Test Project candidates are browser-local only.
+// These demo selections never touch real creator or job records.
+function shDemoListKey(job,viewer){return 'sh_demo_candidates_v13513_'+viewer.id+'_'+job.id}
+function shDemoGet(job,viewer){try{const values=JSON.parse(localStorage.getItem(shDemoListKey(job,viewer))||'[]');return Array.isArray(values)?values.filter(n=>shSpotlightDemoCreators.some(d=>d.name===n)).map(n=>({id:'demo-'+n,demo_key:n,creator_id:null})):[]}catch(e){console.warn('Demo shortlist read failed',e);return []}}
+function shDemoSet(job,viewer,items){localStorage.setItem(shDemoListKey(job,viewer),JSON.stringify(items.map(x=>x.demo_key)))}
+function shShortlistError(err){const msg=$('shSpotStatus');if(msg)msg.textContent='Candidate list error: '+(err?.message||String(err))}
+async function shReadShortlist(job){const viewer=await shGetViewer();if(!viewer||!job)return[];if(job.__privateTest)return shDemoGet(job,viewer);const query=client.from('sh_job_shortlists').select('id,creator_id,demo_key,created_at').eq('owner_id',viewer.id).eq(job.__privateTest?'private_test_id':'job_id',job.id).order('created_at',{ascending:false});const {data,error}=await query;if(error){console.warn('Shortlist load:',error.message);shShortlistError(error);throw error}return data||[]}
+async function shToggleCandidateSave(job,p,isDemo,button){
+ const status=$('shSpotStatus');if(!button||!job)return;
+ button.disabled=true;button.textContent='Saving…';
+ try{
+  const viewer=await shGetViewer();if(!viewer)throw Error('Please sign in first.');
+  if(job.__privateTest){
+   if(!isDemo)throw Error('Only fictional test creators belong in this test shortlist.');
+   const existing=shDemoGet(job,viewer),match=existing.find(x=>x.demo_key===p.name);
+   const next=match?existing.filter(x=>x.demo_key!==p.name):[...existing,{demo_key:p.name}];
+   shDemoSet(job,viewer,next);
+   button.setAttribute('aria-pressed',String(!match));
+   button.textContent=match?'♡ Save to potential candidates':'♥ Saved for this job';
+   if(status)status.textContent=match?'Removed from demo shortlist.':'Saved to this private test job! Open Potential candidates to review. (Saved only on this device.)';
+   return;
+  }
+  if(isDemo)throw Error('Fictional profiles cannot be saved to real jobs.');
+  const existing=await shReadShortlist(job),match=existing.find(x=>x.creator_id===p.id);
+  let result;
+  if(match)result=await client.from('sh_job_shortlists').delete().eq('id',match.id).eq('owner_id',viewer.id);
+  else result=await client.from('sh_job_shortlists').insert({owner_id:viewer.id,job_id:job.id,creator_id:p.id});
+  if(result.error)throw result.error;
+  button.setAttribute('aria-pressed',String(!match));button.textContent=match?'♡ Save to potential candidates':'♥ Saved for this job';
+  if(status)status.textContent=match?'Removed from this job shortlist.':'Saved to this job. Open Potential candidates to review.';
+ }catch(e){console.error('Candidate save failed',e);button.textContent='♡ Retry save';if(status)status.textContent='Could not save candidate: '+(e?.message||String(e))+'. For real jobs confirm the shortlist SQL is installed.'}
+ finally{button.disabled=false}
+}
+function shSaveButton(job,p,isDemo){const btn=shBookingText('button','♡ Save to potential candidates','sh-save-candidate');btn.type='button';btn.setAttribute('aria-pressed','false');btn.onclick=()=>shToggleCandidateSave(job,p,isDemo,btn);shReadShortlist(job).then(items=>{if(!btn.isConnected)return;const saved=items.some(x=>isDemo?x.demo_key===p.name:x.creator_id===p.id);btn.textContent=saved?'♥ Saved for this job':'♡ Save to potential candidates';btn.setAttribute('aria-pressed',String(saved))}).catch(e=>{if(btn.isConnected)btn.title='Shortlist unavailable: '+(e?.message||e)});return btn}
+window.shShowJobShortlist=async function(job){if(!job)return;shCloseSpotlight();const area=$('shJobShortlistArea'),list=$('shJobShortlistList'),msg=$('shJobShortlistStatus');if(!area||!list)return;area.classList.remove('hidden');list.replaceChildren();$('shJobShortlistHeading').textContent='Potential candidates · '+job.title;msg.textContent='Loading your saved candidates…';let saved;try{saved=await shReadShortlist(job)}catch(e){msg.textContent='Could not load candidates: '+(e?.message||e);return}msg.textContent=saved.length+' saved candidate(s) for this job · '+(job.__privateTest?'Demo selections saved in this browser only.':'Only visible to you.');
+for(const entry of saved){let p=entry.demo_key?shSpotlightDemoCreators.find(x=>x.name===entry.demo_key):publicList.find(x=>x.id===entry.creator_id);if(!p&&entry.creator_id){if(!publicList.length)await loadCreators();p=publicList.find(x=>x.id===entry.creator_id)}const card=shBookingText('article',null,'sh-shortlist-person'),name=p?(p.name||p.display_name):'Creator profile unavailable';card.append(shBookingText('strong',name),shBookingText('span',entry.demo_key?'FICTIONAL DEMO · Preview only':[p?.city,p?.state].filter(Boolean).join(', ')));if(entry.creator_id&&p){const open=shBookingText('button','View profile ↗','filter');open.onclick=()=>openProfile(p.id);card.append(open)}const remove=shBookingText('button','Remove from shortlist','filter');remove.onclick=async()=>{const viewer=await shGetViewer();if(!viewer)return;if(job.__privateTest){shDemoSet(job,viewer,shDemoGet(job,viewer).filter(x=>x.demo_key!==entry.demo_key));window.shShowJobShortlist(job);return}const {error}=await client.from('sh_job_shortlists').delete().eq('id',entry.id).eq('owner_id',viewer.id);if(error){msg.textContent=error.message;return}window.shShowJobShortlist(job)};card.append(remove);list.append(card)}
 area.scrollIntoView({behavior:'smooth',block:'start'})};
 $('shShortlistClose')?.addEventListener('click',()=>$('shJobShortlistArea')?.classList.add('hidden'));
 $('shSpotClose')?.addEventListener('click',shCloseSpotlight);

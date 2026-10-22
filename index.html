@@ -159,7 +159,7 @@
 
 .sh-private-tests{margin:24px 0;padding:20px;border:1px solid #d4bd99;border-radius:16px;background:#faf5eb}.sh-test-switch{display:flex;align-items:center;gap:12px;font-weight:700}.sh-test-switch input{width:20px;height:20px;flex:0 0 auto}.sh-test-card{padding:16px;border:1px solid #e1d0b8;border-radius:12px;margin:12px 0}.sh-test-pill{color:#7c6041;font-size:12px;font-weight:700;letter-spacing:.06em}.shspot-demo-cover{height:145px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}.shspot-demo-monogram{font-family:Georgia,serif;font-size:68px;color:#faebce;text-shadow:0 5px 22px #061212}.shspot-demo-stamp{position:absolute;right:10px;top:10px;border:1px solid #e2bc80;color:#ffe0a8;border-radius:99px;padding:5px 9px;font-size:9px;font-weight:800;letter-spacing:.08em;background:#0b1518cc}.shspot-demo-card .sh-demo-busy{color:#ffadaf}.shspot-demo-card .sh-demo-details{border-top:1px solid #6a736b;margin-top:12px;padding-top:12px}.shspot-demo-card .sh-demo-details p{font-size:13px;line-height:1.55}.shspot-demo-card .shspot-demo-notice{font-size:11px;color:#e3c899}.shspot-demo-card button{width:100%;min-height:42px}@media(max-width:500px){.shspot-demo-cover{height:125px}}
 
-/* V13.5.12 — Job-specific Spotlight overlay and shortlist */
+/* V13.5.13 — Job-specific Spotlight overlay and shortlist */
 #shSpotlight.shspot-modal{position:fixed!important;inset:4vh max(12px,calc((100vw - 1100px)/2))!important;z-index:10040!important;margin:0!important;max-height:92dvh;overflow-y:auto;overscroll-behavior:contain;box-shadow:0 0 0 120vmax rgba(9,15,17,.70),0 30px 100px rgba(0,0,0,.55)!important;backdrop-filter:blur(8px);animation:shSpotEntrance .48s ease-out both}
 body.sh-spot-open::before{content:'';position:fixed;inset:0;z-index:10030;background:rgba(4,12,15,.54);backdrop-filter:blur(9px);pointer-events:auto}
 body.sh-spot-open{overflow:hidden}
@@ -600,7 +600,7 @@ const exampleJobs=[{title:'Second wedding photographer',location:'Sacramento, CA
  if('serviceWorker' in navigator){window.addEventListener('load',()=>{
    navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(error=>console.info('App install support unavailable:',error.message));
  });}
- const build='V13.5.12';
+ const build='V13.5.13';
  document.querySelectorAll('[data-sh-version]').forEach(el=>{el.textContent=build;});
 })();
 </script><script id="sh-v131-ux">
