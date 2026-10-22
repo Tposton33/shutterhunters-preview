@@ -494,17 +494,28 @@ async function shLensLoad(){
  items.forEach((m,index)=>{
    const creator=allowed.get(m.user_id),card=document.createElement('button');card.type='button';card.className='sh-lens-card';card.setAttribute('aria-label','Preview '+(m.title||'creative project')+' by '+(creator.display_name||'a creator'));
    const thumb=validLink(m.thumbnail_url)|| (m.media_type==='image'?validLink(m.media_url):null) || validLink(creator.cover_url)||validLink(creator.avatar_url);
-   if(thumb){const img=document.createElement('img');img.src=thumb;img.loading=index===0?'eager':'lazy';img.alt='Portfolio project by '+(creator.display_name||'a ShutterHunters creator');card.append(img)}
+   if(m.media_type==='video'){
+     const vid=document.createElement('video');vid.src=m.media_url;vid.muted=true;vid.defaultMuted=true;vid.autoplay=true;vid.loop=true;vid.playsInline=true;vid.preload='metadata';vid.setAttribute('muted','');vid.setAttribute('playsinline','');vid.setAttribute('aria-hidden','true');vid.tabIndex=-1;
+     if(thumb)vid.poster=thumb;
+     card.append(vid);
+   }else if(thumb){const img=document.createElement('img');img.src=thumb;img.loading=index===0?'eager':'lazy';img.alt='Portfolio project by '+(creator.display_name||'a ShutterHunters creator');card.append(img)}
    if(m.media_type==='video'){const play=document.createElement('span');play.className='sh-lens-play';play.textContent='▶ FILM';card.append(play)}
-   const info=document.createElement('span');info.className='sh-lens-copy';const label=document.createElement('span');label.className='sh-lens-label';label.textContent=m.media_type==='video'?'FEATURED FILM':'FEATURED FRAME';const title=document.createElement('strong');title.textContent=(m.caption||m.title||'A story worth sharing').slice(0,90);const credit=document.createElement('small');credit.textContent='BY '+(creator.display_name||'SHUTTERHUNTERS CREATOR');info.append(label,title,credit);card.append(info);
+   const info=document.createElement('span');info.className='sh-lens-copy';const label=document.createElement('span');label.className='sh-lens-label';label.textContent=m.media_type==='video'?'FEATURED FILM':'FEATURED FRAME';const title=document.createElement('strong');title.textContent=(m.title||m.caption||'A story worth sharing').trim().slice(0,66);const credit=document.createElement('small');credit.textContent='BY '+(creator.display_name||'SHUTTERHUNTERS CREATOR');info.append(label,title,credit);card.append(info);
    card.onclick=()=>shLensOpen(m,creator);grid.append(card);
  });
  stage.replaceChildren(grid);
+ const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+ const saveData=navigator.connection?.saveData;
+ if(!reduce&&!saveData){
+   if(window.shLensObserver)window.shLensObserver.disconnect();
+   window.shLensObserver=new IntersectionObserver(entries=>entries.forEach(entry=>{const v=entry.target;if(entry.isIntersecting&&!document.hidden){v.play().catch(()=>{});}else v.pause();}),{threshold:.3});
+   grid.querySelectorAll('video').forEach(v=>window.shLensObserver.observe(v));
+ }
 }
 function shLensOpen(m,creator){
  const overlay=$('shLensViewer'),container=$('shLensViewerContent');if(!overlay||!container)return;container.replaceChildren();
- const media=document.createElement(m.media_type==='video'?'video':'img');media.className='sh-lens-viewer-media';media.src=m.media_url;if(m.media_type==='video'){media.controls=true;media.playsInline=true;media.preload='metadata'}else{media.alt=m.caption||m.title||'Creator portfolio photo'}
- const title=document.createElement('h3');title.textContent=m.title||'Behind the Lens';const desc=document.createElement('p');desc.textContent=m.caption||'';const credit=document.createElement('div');credit.className='sh-lens-credit';credit.append(document.createTextNode('CREATED BY '));const link=document.createElement('button');link.type='button';link.textContent=creator.display_name||'View creator';link.onclick=()=>{shLensClose();openProfile(creator.id)};credit.append(link);container.append(media,title,desc,credit);overlay.hidden=false;document.body.style.overflow='hidden';$('shLensClose')?.focus();
+ const media=document.createElement(m.media_type==='video'?'video':'img');media.className='sh-lens-viewer-media';media.src=m.media_url;if(m.media_type==='video'){media.controls=true;media.playsInline=true;media.preload='metadata';media.autoplay=true;media.muted=false;media.volume=1}else{media.alt=m.caption||m.title||'Creator portfolio photo'}
+ const title=document.createElement('h3');title.textContent=m.title||'Behind the Lens';const desc=document.createElement('p');desc.textContent=m.caption||'';const credit=document.createElement('div');credit.className='sh-lens-credit';credit.append(document.createTextNode('CREATED BY '));const link=document.createElement('button');link.type='button';link.textContent=creator.display_name||'View creator';link.onclick=()=>{shLensClose();openProfile(creator.id)};credit.append(link);container.append(media,title,desc,credit);overlay.hidden=false;document.body.style.overflow='hidden';if(m.media_type==='video')media.play().catch(()=>{});$('shLensClose')?.focus();
 }
 function shLensClose(){const overlay=$('shLensViewer');if(!overlay)return;overlay.hidden=true;overlay.querySelector('video')?.pause();document.body.style.overflow=''}
 $('shLensClose')?.addEventListener('click',shLensClose);
