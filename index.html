@@ -517,6 +517,33 @@ body{width:100%;max-width:100%;overflow-x:clip}
 @media(prefers-reduced-motion:reduce){.sh-lens-card video{visibility:hidden}.sh-lens-card video[poster]{visibility:visible}}
 .v1361-plan-status{display:inline-block;border:1px solid #ab8a60;border-radius:99px;padding:4px 9px;font-size:11px;letter-spacing:.03em;color:#73532e;margin-top:9px}
 .v1361-plan-explainer{max-width:850px;margin:25px auto 28px;font-size:15px;line-height:1.7;color:#4f514c}
+
+/* V13.6.2 — Behind the Lens: images stay clean, text stays in a dedicated caption rail. */
+.sh-lens-grid{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr) minmax(0,1fr)}
+.sh-lens-card{isolation:isolate;justify-content:flex-end;min-width:0}
+.sh-lens-card img,.sh-lens-card video{inset:0 0 92px 0;width:100%;height:calc(100% - 92px);object-fit:cover;display:block}
+.sh-lens-card:first-child img,.sh-lens-card:first-child video{bottom:116px;height:calc(100% - 116px)}
+.sh-lens-card::after{display:none!important}
+.sh-lens-card .sh-lens-copy{position:relative;z-index:2;flex-shrink:0;height:92px;min-height:92px;max-height:92px;overflow:hidden;padding:11px 14px!important;gap:3px!important;background:#112123;box-sizing:border-box}
+.sh-lens-card:first-child .sh-lens-copy{height:116px;min-height:116px;max-height:116px;padding:17px 19px!important}
+.sh-lens-card .sh-lens-copy strong,.sh-lens-card:not(:first-child) .sh-lens-copy strong{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;line-height:1.18!important;font-size:clamp(14px,1.25vw,18px)!important;overflow-wrap:anywhere;word-break:normal;margin:0}
+.sh-lens-card:first-child .sh-lens-copy strong{font-size:clamp(18px,2.2vw,27px)!important}
+.sh-lens-card .sh-lens-copy small{display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:11px}
+.sh-lens-card .sh-lens-label{font-size:9px;letter-spacing:.1em}
+.sh-lens-play{top:11px;left:11px;z-index:3}
+.sh-lens-card:focus-visible{outline:3px solid #dcaf72;outline-offset:3px}
+@media(max-width:800px){
+ .sh-lens-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .sh-lens-card img,.sh-lens-card video{bottom:85px;height:calc(100% - 85px)}
+ .sh-lens-card .sh-lens-copy{height:85px;min-height:85px;max-height:85px;padding:9px!important}
+ .sh-lens-card:first-child img,.sh-lens-card:first-child video{bottom:92px;height:calc(100% - 92px)}
+ .sh-lens-card:first-child .sh-lens-copy{height:92px;min-height:92px;max-height:92px;padding:11px!important}
+ .sh-lens-card .sh-lens-copy strong,.sh-lens-card:not(:first-child) .sh-lens-copy strong{font-size:13px!important}
+ .sh-lens-card:first-child .sh-lens-copy strong{font-size:18px!important}
+ .sh-lens-card .sh-lens-label{font-size:8px}
+ .sh-lens-card .sh-lens-copy small{font-size:9px}
+}
+@media(max-width:420px){.sh-lens-grid{column-gap:9px;row-gap:9px}.sh-lens-card .sh-lens-copy strong,.sh-lens-card:not(:first-child) .sh-lens-copy strong{font-size:12px!important}}
 </style></head><body>
 <header class="header"><nav class="shell nav"><a class="brand" href="#" onclick="go('discover');return false">Shutter<span>Hunters.</span></a><div class="navlinks"><button onclick="go('discover')">Discover</button><button onclick="go('jobs')">Find jobs</button><button onclick="go('directory')">Creators</button><button onclick="shOpenSchedule()">My Schedule</button><button onclick="shOpenMyPublicProfile()">My Profile</button><button onclick="go('inquiries')">Inquiries <span id="navInboxCount" class="inbox-count hidden"></span></button><button onclick="go('membership')">Membership</button><button onclick="go('safe')">ShutterSafe</button></div><button class="navcta" onclick="shOpenMyPublicProfile()">My Profile ↗</button><div id="shAccountActions" class="sh-account-actions hidden"><button id="shAccountToggle" class="sh-account-toggle" type="button" aria-expanded="false" aria-controls="shAccountMenu" title="Account settings">⚙ <span>Account</span></button><div id="shAccountMenu" class="sh-account-menu hidden"><p id="shAccountEmail" class="sh-account-email"></p><button type="button" id="shAccountDetails">Account details</button><button type="button" id="shAccountMembership">Manage membership</button><button type="button" id="shAccountSignout">Sign out</button><p id="shAccountMenuStatus" role="status" aria-live="polite"></p></div></div></nav></header>
 <main id="discover"><aside class="shtrust-banner" role="link" tabindex="0" aria-label="Explore the ShutterSafe protected booking concept" onclick="document.getElementById('shsafeShowcase').scrollIntoView({behavior:'smooth',block:'center'})" onkeydown="if(event.target===this &amp;&amp; (event.key==='Enter' || event.key===' ')){event.preventDefault();this.click()}"><div class="shtrust-banner-inner"><div class="shtrust-lead"><span class="shtrust-emblem" aria-hidden="true">♢</span><div class="shtrust-copy"><span class="shtrust-kicker">✦ INTRODUCING SHUTTERSAFE · COMING SOON</span><strong class="shtrust-title" id="shtrustTitle">Confidence starts with a clear agreement.</strong><span class="shtrust-detail" id="shtrustDetail">Planned contracts signed by both clients and creators.</span></div></div><button class="shtrust-link" type="button" onclick="document.getElementById('shsafeShowcase').scrollIntoView({behavior:'smooth',block:'center'})" aria-label="Explore the ShutterSafe protected booking concept">Explore protection ↗</button></div></aside><section class="hero"><img class="heroimage" id="heroimg" alt="Cinematographer capturing a wedding at sunset"><div class="shell heroin"><div class="caps goldtext">A home for the people behind the camera</div><h1>Make art.<br><em>Find your people.</em></h1><p class="lead">Photographers, filmmakers, editors and crews. Find your next collaborator, book your next gig, and make something worth remembering.</p><div class="heroactions"><button class="action" onclick="document.getElementById('creatorsection').scrollIntoView({behavior:'smooth'})">Explore creatives →</button><button class="action secondary" onclick="go('jobs')">Find a gig ↗</button></div><div class="scrolly">NATIONWIDE · EVERY KIND OF CREATIVE</div></div></section>
