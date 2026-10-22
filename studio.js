@@ -821,4 +821,55 @@ async function shGetJobTier(id){const {data,error}=await client.from('creator_me
 window.shLoadRealJobs=async function(){const out=$('shLiveJobsList'),status=$('shLiveJobsStatus');if(!out||!status)return;out.replaceChildren();status.textContent='Finding current member projects…';const viewer=await shGetViewer();if(!viewer){status.textContent='Sign in to see real member projects. Sample listings are below.';const b=shJobEl('button','Sign in to view jobs','filter');b.onclick=()=>go('account');out.append(b);return}const {data,error}=await client.from('sh_job_posts').select('id,client_id,title,location,specialty,budget,details,status,created_at').eq('status','open').order('created_at',{ascending:false}).limit(50);if(error){status.textContent='Real jobs unavailable. Install V13_4_REAL_JOBS.sql or check permissions: '+error.message;return}status.textContent=(data||[]).length?`${data.length} real member project(s) · Verified account posts`:'No real jobs posted yet. Be the first to share an opportunity.';const tier=await shGetJobTier(viewer.id);const query=(window.shCityQuery||'').toLowerCase();const filtered=(data||[]).filter(j=>!query||String(j.location||'').toLowerCase().includes(query));if(query)status.textContent=filtered.length+' matching real job(s) of '+(data||[]).length+' loaded; showing first 50 latest opportunities.';for(const job of filtered){const card=shJobEl('article',null,'job sh-job-live'),top=shJobEl('div',null,'sh-job-top'),title=shJobEl('h3',job.title),tag=shJobEl('span','REAL MEMBER JOB','sh-job-demo');top.append(title,tag);card.append(top,shJobEl('div',job.location+' · '+job.specialty,'sh-job-meta'),shJobEl('p',job.details));if(job.budget!=null)card.append(shJobEl('strong','$'+Number(job.budget).toLocaleString()+' budget'));const actions=shJobEl('div',null,'sh-job-controls');if(job.client_id===viewer.id){const own=shJobEl('span','Your job listing · Open','sh-job-status');actions.append(own);const close=shJobEl('button','Close job','filter');close.onclick=async()=>{if(!confirm('Close this job to new proposals?'))return;close.disabled=true;const {error}=await client.from('sh_job_posts').update({status:'closed'}).eq('id',job.id).eq('client_id',viewer.id);if(error){alert(error.message);close.disabled=false}else window.shLoadRealJobs()};actions.append(close)}else if(tier){const apply=shJobEl('button','Send proposal & message client →','action');actions.append(apply);apply.onclick=()=>{if(card.querySelector('.sh-proposal-box')){card.querySelector('.sh-proposal-box').remove();return}const box=shJobEl('form',null,'sh-proposal-box'),label=shJobEl('label','Introduce yourself and explain your fit for this project'),input=document.createElement('textarea'),feedback=shJobEl('p','','sh-job-status'),send=shJobEl('button','Submit proposal','action');input.required=true;input.minLength=20;input.maxLength=3000;input.placeholder='Hi! I am a filmmaker specializing in…';send.type='submit';box.append(label,input,send,feedback);box.onsubmit=async e=>{e.preventDefault();send.disabled=true;feedback.textContent='Submitting…';const result=await client.rpc('sh_apply_to_job',{p_job_id:job.id,p_message:input.value.trim()});if(result.error){feedback.textContent=result.error.message;send.disabled=false;return}feedback.textContent='Proposal sent! Open Inquiries → Sent to continue your conversation.';send.textContent='Proposal sent';send.disabled=true};card.append(box)}}else{const upgrade=shJobEl('button','Unlock Pro to send a proposal','filter');upgrade.onclick=()=>go('membership');actions.append(upgrade)}card.append(actions);out.append(card)}};
 window.shPublishJob=async function(form){const status=$('shPostJobStatus'),submit=form.querySelector('button[type=submit],button:not([type])');status.textContent='';const viewer=await shGetViewer();if(!viewer){status.textContent='Sign in before publishing a job.';go('account');return}const fields=Object.fromEntries(new FormData(form));const title=String(fields.title||'').trim(),location=String(fields.location||'').trim(),specialty=String(fields.specialty||'').trim(),details=String(fields.details||'').trim(),budget=fields.budget===''?null:Number(fields.budget);if(title.length<5||location.length<2||details.length<15){status.textContent='Add a clear job title (5+ characters), location and project details (15+ characters).';return}submit.disabled=true;status.textContent='Publishing your job…';const {error}=await client.from('sh_job_posts').insert({client_id:viewer.id,title,location,specialty,details,budget});submit.disabled=false;if(error){status.textContent='Could not publish: '+error.message;return}form.reset();status.textContent='Your job is published. Pro and Studio creators can now send proposals.';go('jobs')};
 
+
+// V13.5.6 — Private creator schedule and public camera availability.
+const shCal = {month:new Date(new Date().getFullYear(),new Date().getMonth(),1),rows:new Map()};
+const shDateLocal=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+const shDateShort=day=>new Date(day+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+function shScheduleMessage(t){const el=$('shCalStatus');if(el)el.textContent=t}
+async function shLoadSchedule(){
+ if(!user){shCal.rows.clear();shRenderSchedule();shScheduleMessage('Sign in to manage your private calendar.');return}
+ shScheduleMessage('Loading your private schedule…');
+ const from=shDateLocal(new Date(shCal.month.getFullYear(),shCal.month.getMonth()-1,1));
+ const to=shDateLocal(new Date(shCal.month.getFullYear(),shCal.month.getMonth()+3,0));
+ const {data,error}=await client.from('creator_schedule_days').select('day,status,title,notes').eq('creator_id',user.id).gte('day',from).lte('day',to).order('day');
+ if(error){shCal.rows.clear();shScheduleMessage('Schedule unavailable. Install V13_5_6_SCHEDULE.sql in Supabase first. '+error.message);shRenderSchedule();return}
+ shCal.rows=new Map((data||[]).map(r=>[r.day,r])); shRenderSchedule();shScheduleMessage('Your changes are stored privately in your ShutterHunters account.');
+}
+function shRenderSchedule(){
+ const grid=$('shCalGrid');if(!grid)return;grid.replaceChildren();
+ $('shCalMonth').textContent=shCal.month.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+ for(const wd of ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'])grid.append(text('div',wd,'sh-cal-heading'));
+ const yr=shCal.month.getFullYear(), mo=shCal.month.getMonth(), count=new Date(yr,mo+1,0).getDate();
+ for(let i=0;i<new Date(yr,mo,1).getDay();i++)grid.append(document.createElement('div'));
+ for(let n=1;n<=count;n++){
+  const day=shDateLocal(new Date(yr,mo,n)),record=shCal.rows.get(day),state=record?.status||'unknown';
+  const b=document.createElement('button');b.type='button';b.className='sh-cal-day sh-day-'+state+(day===$('shCalDate').value?' selected':'');
+  b.setAttribute('aria-label',shDateShort(day)+': '+(state==='booked'?'booked':state==='available'?'available':'not specified'));
+  b.append(text('strong',String(n)),text('span','📷','sh-cal-emoji'));if(record?.title)b.append(text('small',record.title));
+  b.onclick=()=>shChooseDate(day);grid.append(b);
+ }
+ const upcoming=$('shCalUpcoming');upcoming.replaceChildren();
+ const today=shDateLocal(new Date());const rows=[...shCal.rows.values()].filter(r=>r.status==='booked'&&r.day>=today).sort((a,b)=>a.day.localeCompare(b.day)).slice(0,8);
+ if(!rows.length)upcoming.append(text('p','No upcoming booked dates in the loaded calendar.','subtle'));
+ for(const r of rows){const d=document.createElement('div');d.className='sh-cal-upcoming-item';const tomorrow=shDateLocal(new Date(Date.now()+86400000))===r.day;d.append(text('strong',(tomorrow?'🎬 Tomorrow — ':'📷 ')+shDateShort(r.day)),text('p',r.title||'Booked / unavailable'));if(r.notes)d.append(text('small',r.notes));upcoming.append(d)}
+}
+function shChooseDate(day){$('shCalDate').value=day;const r=shCal.rows.get(day);$('shCalKind').value=r?.status||'available';$('shCalTitleInput').value=r?.title||'';$('shCalNotes').value=r?.notes||'';shRenderSchedule()}
+window.shOpenSchedule=async()=>{if(!user){go('account');return}go('schedule');shChooseDate(shDateLocal(new Date()));await shLoadSchedule()};
+$('shCalPrev')?.addEventListener('click',async()=>{shCal.month=new Date(shCal.month.getFullYear(),shCal.month.getMonth()-1,1);await shLoadSchedule()});
+$('shCalNext')?.addEventListener('click',async()=>{shCal.month=new Date(shCal.month.getFullYear(),shCal.month.getMonth()+1,1);await shLoadSchedule()});
+$('shCalForm')?.addEventListener('submit',async e=>{e.preventDefault();if(!user)return shScheduleMessage('Sign in first.');const day=$('shCalDate').value;if(!day)return;shScheduleMessage('Saving…');const record={creator_id:user.id,day,status:$('shCalKind').value,title:$('shCalTitleInput').value.trim(),notes:$('shCalNotes').value.trim()};const {error}=await client.from('creator_schedule_days').upsert(record,{onConflict:'creator_id,day'});if(error)return shScheduleMessage('Could not save: '+error.message);shCal.rows.set(day,record);shRenderSchedule();shScheduleMessage('Saved '+shDateShort(day)+' securely.')});
+$('shCalRemove')?.addEventListener('click',async()=>{if(!user)return;const day=$('shCalDate').value;if(!day)return;const {error}=await client.from('creator_schedule_days').delete().eq('creator_id',user.id).eq('day',day);if(error)return shScheduleMessage('Could not clear: '+error.message);shCal.rows.delete(day);shChooseDate(day);shScheduleMessage('Cleared '+shDateShort(day)+'. Public camera is now gray.')});
+async function shUpdateCamera(creatorId,day){
+ const output=$('shProfileCamera');if(!output)return;
+ output.className='sh-camera sh-unknown';output.textContent='📷 Checking availability…';
+ if(!creatorId||!day){output.textContent='📷 Select a date to check availability';return}
+ const request=String(creatorId)+':'+day;output.dataset.request=request;
+ const {data,error}=await client.rpc('sh_creator_availability',{p_creator:creatorId,p_day:day});
+ if(output.dataset.request!==request)return;
+ const state=!error&&['available','booked'].includes(data)?data:'unknown';output.className='sh-camera sh-'+(state==='booked'?'busy':state);output.textContent=state==='available'?'📷 Available for '+shDateShort(day):state==='booked'?'📷 Booked / unavailable '+shDateShort(day):'📷 Availability not specified for '+shDateShort(day);
+}
+$('shProfileDate')?.addEventListener('change',()=>shUpdateCamera(viewed?.id,$('shProfileDate').value));
+const shOriginalOpenProfile=openProfile;
+openProfile=async function(id){await shOriginalOpenProfile(id);if(viewed?.id===id){$('shProfileDate').value='';shUpdateCamera(id,'')}};
 })();
