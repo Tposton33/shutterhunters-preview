@@ -930,7 +930,58 @@ async function shToggleCandidateSave(job,p,isDemo,button){
 }
 function shSaveButton(job,p,isDemo){const btn=shBookingText('button','♡ Save to potential candidates','sh-save-candidate');btn.type='button';btn.setAttribute('aria-pressed','false');btn.onclick=()=>shToggleCandidateSave(job,p,isDemo,btn);shReadShortlist(job).then(items=>{if(!btn.isConnected)return;const saved=items.some(x=>isDemo?x.demo_key===p.name:x.creator_id===p.id);btn.textContent=saved?'♥ Saved for this job':'♡ Save to potential candidates';btn.setAttribute('aria-pressed',String(saved))}).catch(e=>{if(btn.isConnected)btn.title='Shortlist unavailable: '+(e?.message||e)});return btn}
 window.shShowJobShortlist=async function(job){if(!job)return;shCloseSpotlight();const area=$('shJobShortlistArea'),list=$('shJobShortlistList'),msg=$('shJobShortlistStatus');if(!area||!list)return;area.classList.remove('hidden');list.replaceChildren();$('shJobShortlistHeading').textContent='Potential candidates · '+job.title;msg.textContent='Loading your saved candidates…';let saved;try{saved=await shReadShortlist(job)}catch(e){msg.textContent='Could not load candidates: '+(e?.message||e);return}msg.textContent=saved.length+' saved candidate(s) for this job · '+(job.__privateTest?'Demo selections saved in this browser only.':'Only visible to you.');
-for(const entry of saved){let p=entry.demo_key?shSpotlightDemoCreators.find(x=>x.name===entry.demo_key):publicList.find(x=>x.id===entry.creator_id);if(!p&&entry.creator_id){if(!publicList.length)await loadCreators();p=publicList.find(x=>x.id===entry.creator_id)}const card=shBookingText('article',null,'sh-shortlist-person'),name=p?(p.name||p.display_name):'Creator profile unavailable';card.append(shBookingText('strong',name),shBookingText('span',entry.demo_key?'FICTIONAL DEMO · Preview only':[p?.city,p?.state].filter(Boolean).join(', ')));if(entry.creator_id&&p){const open=shBookingText('button','View profile ↗','filter');open.onclick=()=>openProfile(p.id);card.append(open)}const remove=shBookingText('button','Remove from shortlist','filter');remove.onclick=async()=>{const viewer=await shGetViewer();if(!viewer)return;if(job.__privateTest){shDemoSet(job,viewer,shDemoGet(job,viewer).filter(x=>x.demo_key!==entry.demo_key));window.shShowJobShortlist(job);return}const {error}=await client.from('sh_job_shortlists').delete().eq('id',entry.id).eq('owner_id',viewer.id);if(error){msg.textContent=error.message;return}window.shShowJobShortlist(job)};card.append(remove);list.append(card)}
+for(const entry of saved){
+ let p=entry.demo_key?shSpotlightDemoCreators.find(x=>x.name===entry.demo_key):publicList.find(x=>x.id===entry.creator_id);
+ if(!p&&entry.creator_id){
+  if(!publicList.length)await loadCreators();
+  p=publicList.find(x=>x.id===entry.creator_id);
+ }
+ const isDemo=!!entry.demo_key;
+ const card=shBookingText('article',null,'sh-shortlist-profile-card');
+ const cover=shBookingText('div',null,'sh-shortlist-cover');
+ if(isDemo&&p){
+  cover.classList.add('is-demo');
+  cover.style.background='radial-gradient(circle at 75% 25%, '+p.color+', #142527 76%)';
+  cover.append(shBookingText('span',p.initials,'sh-shortlist-cover-initials'));
+ }else if(p){
+  const image=document.createElement('img');image.loading='lazy';image.alt='Portfolio cover for '+(p.display_name||'creator');image.src=validLink(p.cover_url)||validLink(p.avatar_url)||IMAGES.creator1;cover.append(image);
+ }
+ const tag=shBookingText('span',isDemo?'FICTIONAL DEMO':'SAVED CREATOR','sh-shortlist-cover-tag');cover.append(tag);card.append(cover);
+ if(p){
+  const avatar=shBookingText('div',null,'sh-shortlist-avatar');
+  if(isDemo){avatar.textContent=p.initials;avatar.style.background=p.color}
+  else {const av=document.createElement('img');av.src=validLink(p.avatar_url)||IMAGES.creator1;av.loading='lazy';av.alt=(p.display_name||'Creator')+' profile photo';avatar.append(av)}
+  card.append(avatar);
+ }
+ const body=shBookingText('div',null,'sh-shortlist-profile-body');
+ body.append(shBookingText('h3',p?(p.name||p.display_name):'Creator profile unavailable'));
+ if(p){
+  body.append(shBookingText('p',isDemo?p.city+' · '+p.specialty.join(' · '):[p.role,p.city,p.state].filter(Boolean).join(' · '),'sh-shortlist-meta'));
+  if(isDemo){
+   body.append(shBookingText('span',p.tier.toUpperCase()+' · SIMULATED MEMBERSHIP','sh-shortlist-tier'));
+   body.append(shBookingText('p',p.bio,'sh-shortlist-bio'));
+   const status=shBookingText('div','📷 '+(p.status==='booked'?'Booked on example date':'Available on example date'),'sh-dir-date-status'+(p.status==='booked'?' is-busy':''));body.append(status);
+   const detail=shBookingText('div',null,'sh-shortlist-demo-detail hidden');
+   detail.append(shBookingText('p','Preview only. A real creator would display their uploaded films, photo portfolio and full profile here. This fictional creator cannot receive bookings or payments.'));
+   const viewDemo=shBookingText('button','View demo profile ↓','sh-shortlist-primary');viewDemo.type='button';viewDemo.onclick=()=>{detail.classList.toggle('hidden');viewDemo.textContent=detail.classList.contains('hidden')?'View demo profile ↓':'Hide demo profile ↑'};
+   body.append(viewDemo,detail);
+  }else{
+   if(p.bio)body.append(shBookingText('p',p.bio.length>150?p.bio.slice(0,147)+'…':p.bio,'sh-shortlist-bio'));
+   const skills=shBookingText('div',null,'sh-shortlist-skills');for(const skill of specialtiesOf(p).slice(0,4))skills.append(shBookingText('span',skill));body.append(skills);
+   if(p.hourly_rate!=null)body.append(shBookingText('p','Starting at $'+p.hourly_rate+'/hr','sh-shortlist-meta'));
+   const open=shBookingText('button','View full creator profile ↗','sh-shortlist-primary');open.type='button';open.onclick=()=>openProfile(p.id);body.append(open);
+   client.rpc('public_creator_premium_tier',{creator_uuid:p.id}).then(({data,error})=>{if(!error&&(data==='studio'||data==='pro')){const tier=shBookingText('span','✦ '+data.toUpperCase()+' MEMBER','sh-shortlist-tier');body.insertBefore(tier,body.children[1]||null)}}).catch(()=>{});
+   if(job.event_date){const status=shBookingText('div','📷 Checking availability…','sh-dir-date-status is-checking');body.append(status);client.rpc('sh_creator_availability',{p_creator:p.id,p_day:job.event_date}).then(({data,error})=>{status.textContent=error?'📷 Availability unavailable':data==='booked'?'📷 Booked for this date':'📷 Available for this date';status.className='sh-dir-date-status'+(error?' is-error':data==='booked'?' is-busy':'')}).catch(()=>{status.textContent='📷 Availability unavailable';status.className='sh-dir-date-status is-error'})}
+  }
+ }else body.append(shBookingText('p','This creator profile is no longer publicly available.','sh-shortlist-meta'));
+ const remove=shBookingText('button','♡ Remove from this job shortlist','sh-shortlist-remove');remove.type='button';remove.onclick=async()=>{
+  const viewer=await shGetViewer();if(!viewer)return;
+  remove.disabled=true;
+  if(job.__privateTest){shDemoSet(job,viewer,shDemoGet(job,viewer).filter(x=>x.demo_key!==entry.demo_key));window.shShowJobShortlist(job);return}
+  const {error}=await client.from('sh_job_shortlists').delete().eq('id',entry.id).eq('owner_id',viewer.id);
+  if(error){msg.textContent='Could not remove candidate: '+error.message;remove.disabled=false;return}window.shShowJobShortlist(job)
+ };body.append(remove);card.append(body);list.append(card)
+}
 area.scrollIntoView({behavior:'smooth',block:'start'})};
 $('shShortlistClose')?.addEventListener('click',()=>$('shJobShortlistArea')?.classList.add('hidden'));
 $('shSpotClose')?.addEventListener('click',shCloseSpotlight);
