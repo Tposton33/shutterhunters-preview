@@ -266,6 +266,53 @@ const css=`
 #shFindV14 #shLiveJobsStatus{color:#c4d8e5!important}
 #shFindV14 .sh-find-empty{border:1px dashed #688da4;padding:24px;border-radius:15px;color:#c6d7e3;line-height:1.5}
 @media(max-width:700px){#shFindV14 .sh-find-shell{padding-top:12px}#shFindV14 .sh-find-hero{padding:30px 4px 16px}#shFindV14 .sh-find-content{gap:12px}#shFindV14 #sh82Search .sh82-fields{grid-template-columns:1fr!important}#shFindV14 .sh-find-close{padding:10px 13px}#shFindV14 #sh82Search{width:100%!important}}
+
+/* V18: relocated filters require standalone styling because original rules were #jobs-scoped. */
+#shFindV14,#shFindV14 *{box-sizing:border-box}
+#shFindV14 .sh-find-shell{width:100%;max-width:1080px}
+#shFindV14 .sh-find-content>*{min-width:0}
+#shFindV14 #sh82Search{width:100%;padding:clamp(20px,4vw,32px)!important;overflow:visible}
+#shFindV14 #sh82Search .sh82-search-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:23px}
+#shFindV14 #sh82Search .sh82-search-head>div{flex:1 1 260px;min-width:0}
+#shFindV14 #sh82Search .sh77-kicker{display:block;font:800 11px/1.5 system-ui,sans-serif;letter-spacing:.18em;color:#e7ba85!important}
+#shFindV14 #sh82Search h2{font:400 clamp(27px,4vw,39px)/1.14 Georgia,serif;color:#fff!important;margin:10px 0 12px}
+#shFindV14 #sh82Search .sh82-search-head p{font-size:14px;line-height:1.6;color:#b9cddd!important;margin:0}
+#shFindV14 #sh82Clear{appearance:none;border:1px solid #66849a;background:#15384f;color:#e9f5fd;border-radius:11px;padding:12px 15px;min-height:45px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+#shFindV14 #sh82Search .sh82-fields{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:18px!important;margin:0}
+#shFindV14 #sh82Search .sh82-fields>label,#shFindV14 #sh82Search .sh82-search-foot>label{display:flex!important;flex-direction:column;align-items:stretch;gap:9px;color:#deebf5!important;font:700 12px/1.35 system-ui,sans-serif;letter-spacing:.045em;text-transform:uppercase;min-width:0;width:auto}
+#shFindV14 #sh82Search .sh82-fields>label[hidden]{display:none!important}
+#shFindV14 #sh82Search input:not([type=checkbox]),#shFindV14 #sh82Search select{appearance:auto;display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;min-height:51px;height:51px;padding:12px 14px;border:1px solid #8babc1;border-radius:11px;background:#f5f8fa!important;color:#102c40!important;font:500 16px/1.2 system-ui,sans-serif;box-shadow:none;opacity:1}
+#shFindV14 #sh82Search input::placeholder{color:#667c8b;opacity:1}
+#shFindV14 #sh82Search input:focus-visible,#shFindV14 #sh82Search select:focus-visible,#shFindV14 #sh82Search button:focus-visible{outline:3px solid #f0ba7f;outline-offset:2px}
+#shFindV14 #sh82Search .sh82-tools{display:flex!important;gap:10px;align-items:center;flex-wrap:wrap;margin:22px 0!important}
+#shFindV14 #sh82Search .sh82-tools>button{min-height:44px;border:1px solid #6e95ae;border-radius:12px;background:#1d4762;color:#f2f7fd;padding:11px 15px;font:700 13px/1.3 system-ui,sans-serif;cursor:pointer;white-space:normal}
+#shFindV14 #sh82Search .sh82-toggle{display:flex!important;align-items:center;gap:10px;color:#dcebf6!important;font:500 14px/1.5 system-ui,sans-serif;letter-spacing:0;text-transform:none;cursor:pointer;width:100%}
+#shFindV14 #sh82Available{appearance:auto;display:inline-block!important;flex:0 0 20px;width:20px!important;height:20px!important;margin:0;accent-color:#dfb47e}
+#shFindV14 #sh82Search .sh82-search-foot{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:end;gap:14px;margin:20px 0 0}
+#shFindV14 #sh82Search .sh82-search-button{width:100%;min-height:51px;border:none;border-radius:11px;background:#e4ba82!important;color:#132b3b!important;font:800 15px/1.3 system-ui,sans-serif;padding:13px 16px;cursor:pointer}
+#shFindV14 #sh82GeoNote{margin:16px 0 0;color:#a9c6d9!important;font-size:12px;line-height:1.6}
+#shFindV14 .sh-find-list{min-width:0}
+#shFindV14 .sh-find-top{padding-top:4px}
+@media(max-width:680px){
+ #shFindV14{padding:calc(env(safe-area-inset-top) + 12px) 12px calc(env(safe-area-inset-bottom) + 24px)!important}
+ #shFindV14 .sh-find-shell{padding:0 0 40px}
+ #shFindV14 .sh-find-brand{font-size:10px;letter-spacing:.14em;line-height:1.5}
+ #shFindV14 .sh-find-close{min-height:42px;flex-shrink:0}
+ #shFindV14 .sh-find-hero{padding:25px 2px 20px}
+ #shFindV14 h1{font-size:clamp(37px,10.5vw,52px);line-height:1.06}
+ #shFindV14 .sh-find-hero p{font-size:14px;line-height:1.65}
+ #shFindV14 #sh82Search{padding:20px 16px!important;border-radius:18px!important}
+ #shFindV14 #sh82Search .sh82-search-head{gap:16px;margin-bottom:21px}
+ #shFindV14 #sh82Clear{width:100%;text-align:center}
+ #shFindV14 #sh82Search .sh82-fields{grid-template-columns:minmax(0,1fr)!important;gap:17px!important}
+ #shFindV14 #sh82Search .sh82-tools{display:grid!important;grid-template-columns:1fr 1fr;gap:10px;margin:19px 0!important}
+ #shFindV14 #sh82Search .sh82-tools>button{width:100%;min-width:0;padding:11px 8px;font-size:12px}
+ #shFindV14 #sh82Search .sh82-toggle{grid-column:1/-1;align-items:flex-start}
+ #shFindV14 #sh82Search .sh82-search-foot{grid-template-columns:minmax(0,1fr)!important;gap:16px;margin-top:18px}
+ #shFindV14 .sh-find-list{padding:21px 16px;border-radius:18px}
+ #shFindV14 .sh-find-list h2{font-size:30px}
+}
+
 #sh82DemoMarketplace,#jobslist,#sh80DemoLaunch{display:none!important}
 `;
 const style=document.createElement('style');style.id='shFindV14Styles';style.textContent=css;document.head.append(style);
@@ -326,6 +373,7 @@ async function open(){
   const heading=search.querySelector('.sh82-search-head p');if(heading)heading.textContent='Filter real ShutterHunters opportunities by location, pay, shoot type and availability.';
   overlay.hidden=false;document.body.classList.add('sh-find14-open');overlay.scrollTop=0;
   overlay.querySelector('.sh-find-close').focus({preventScroll:true});
+  const runButton=search.querySelector('#sh82Run');if(runButton&&!runButton.dataset.shFindScroll){runButton.dataset.shFindScroll='1';runButton.addEventListener('click',()=>{if(overlay&&!overlay.hidden)requestAnimationFrame(()=>overlay.querySelector('.sh-find-list')?.scrollIntoView({behavior:'smooth',block:'start'}));});}
   if(typeof window.shLoadRealJobs==='function')Promise.resolve(window.shLoadRealJobs()).catch(err=>console.warn('Find Jobs load:',err));
  }catch(err){console.error('Find Jobs navigation:',err);lockScreen('Unable to open Find Jobs: '+(err?.message||'Please refresh and try again.'));}
  finally{checking=false;}
