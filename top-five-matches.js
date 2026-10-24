@@ -148,13 +148,9 @@ function renderDemoSent(){
     const status=document.getElementById('inquiryStatus');if(status&&/No sent inquiries yet\./i.test(status.textContent||''))status.textContent=`${entries.length} demo sent ${entries.length===1?'inquiry':'inquiries'} · Not delivered`;
   }finally{sh5RenderingDemo=false}
 }
-// The site repaints Inbox asynchronously; reapply demo entries after a genuine repaint.
-let sh5RenderQueued=false;
-const sh5Observer=new MutationObserver(mutations=>{
-  if(sh5RenderingDemo||sh5RenderQueued||!mutations.some(m=>m.target?.id==='inquiryList' || m.target?.closest?.('#inquiryList')))return;
-  sh5RenderQueued=true;queueMicrotask(()=>{sh5RenderQueued=false;renderDemoSent()});
-});
-const sh5InquiryList=document.getElementById('inquiryList');if(sh5InquiryList)sh5Observer.observe(sh5InquiryList,{childList:true});
+// Do not observe inquiryList mutations: rendering demo rows would retrigger the
+// observer and lock the interface. studio.js calls refreshDemoSent once following
+// each completed native Sent inbox refresh.
 document.addEventListener('click',e=>{if(e.target.closest('#sentTab'))renderDemoSentSoon()},true);
 
 window.ShutterHuntersTopFive={openDemo:()=>open('brief'),showMatches:()=>open('matches'),showSent:nativeInbox,refreshDemoSent:renderDemoSent,close:exit};
