@@ -486,3 +486,61 @@ function init(){
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
+
+
+/* V22: Creators > Available Jobs is an inline tab; Discovery/Jobs retain blue full-screen browser. */
+(()=>{'use strict';
+const css=`
+#directory .sh22-inline-jobs{background:#0d2639;color:#eff6fc;border-radius:21px;padding:clamp(16px,4vw,30px);margin:16px 0 25px;min-width:0;box-sizing:border-box}
+#directory .sh22-inline-jobs[hidden]{display:none!important}
+#directory .sh22-inline-jobs h2{font:400 clamp(27px,5vw,39px)/1.15 Georgia,serif;color:#fff;margin:10px 0}
+#directory .sh22-inline-jobs p{color:#bbcedd;line-height:1.6}
+#directory .sh22-inline-jobs .sh22-job-list{display:grid;gap:14px;min-width:0}
+#directory .sh22-inline-jobs .job{background:#f8f8f4;color:#183449;border-radius:14px;padding:18px;min-width:0;overflow-wrap:anywhere}
+#directory .sh22-inline-jobs .job h3{color:#15384e}
+#directory .sh22-inline-jobs .sh22-refresh{background:#dcb47d;color:#173448;border:0;border-radius:10px;padding:12px 17px;font-weight:700;cursor:pointer;min-height:44px}
+#directory .sh22-inline-jobs button:focus-visible{outline:3px solid #ebbd80;outline-offset:3px}
+#directory.sh22-show-jobs > :not(#sh21-tabs):not(#sh22-inline-jobs):not(#sh20-saved){display:none!important}
+#directory.sh22-show-jobs #sh20-saved{display:block!important}
+#directory.sh22-show-jobs .sh21-tabs{display:flex!important}
+#directory .sh21-job-info{display:none!important}
+@media(max-width:640px){#directory .sh22-inline-jobs{padding:17px 13px}#directory .sh22-inline-jobs .job{padding:15px}}
+`;
+function init(){
+ const dir=document.getElementById('directory'), tabs=document.getElementById('sh21-tabs');if(!dir||!tabs||document.getElementById('sh22-inline-jobs'))return;
+ const style=document.createElement('style');style.id='sh22-style';style.textContent=css;document.head.append(style);
+ const jobsTab=document.getElementById('sh21-jobs'),creatorsTab=document.getElementById('sh21-creators');if(!jobsTab||!creatorsTab)return;
+ // Replace just the Jobs tab to remove the previous redirect click listener.
+ const newJobsTab=jobsTab.cloneNode(true);jobsTab.replaceWith(newJobsTab);
+ const pane=document.createElement('section');pane.id='sh22-inline-jobs';pane.className='sh22-inline-jobs';pane.hidden=true;
+ pane.innerHTML='<span style="font:700 11px system-ui;letter-spacing:.15em;color:#eac28b">SHUTTERHUNTERS / AVAILABLE JOBS</span><h2>Creative opportunities.</h2><p>Browse open projects here without leaving Creators. Save a job to find it in Saved Jobs below.</p><button type="button" class="sh22-refresh">Refresh jobs</button><p class="sh22-status" role="status">Loading real opportunities…</p><div class="sh22-job-list"></div>';
+ tabs.after(pane);
+ // Keep the real results node, including existing save-button handlers and render updates.
+ const results=document.getElementById('shLiveJobsList');
+ let marker=null;
+ function bringResults(){
+  if(!results)return;
+  if(!marker){marker=document.createComment('sh22-original-jobs-list');results.parentNode?.insertBefore(marker,results)}
+  if(results.parentNode!==pane.querySelector('.sh22-job-list'))pane.querySelector('.sh22-job-list').append(results);
+  results.style.display='';
+ }
+ function restoreResults(){if(marker?.parentNode&&results&&results.parentNode!==marker.parentNode)marker.parentNode.insertBefore(results,marker)}
+ function showCreators(){dir.classList.remove('sh22-show-jobs');pane.hidden=true;restoreResults();newJobsTab.setAttribute('aria-selected','false');creatorsTab.setAttribute('aria-selected','true')}
+ function showJobs(){
+  dir.classList.add('sh22-show-jobs');pane.hidden=false;creatorsTab.setAttribute('aria-selected','false');newJobsTab.setAttribute('aria-selected','true');
+  bringResults();
+  const status=pane.querySelector('.sh22-status');
+  if(!results){status.textContent='Job listings are unavailable. Please refresh the page.';return}
+  status.textContent='Loading available jobs…';
+  if(typeof window.shLoadRealJobs==='function')Promise.resolve(window.shLoadRealJobs()).then(()=>{status.textContent=results.querySelector('.job')?'Current member projects':'No published jobs are available yet.'}).catch(err=>{status.textContent='Unable to load jobs: '+(err?.message||'Try again.')});
+  else status.textContent=results.querySelector('.job')?'Current member projects':'No published jobs are available yet.';
+ }
+ newJobsTab.addEventListener('click',e=>{e.preventDefault();showJobs()});
+ // Original Find Creators listener still works; this additionally restores inline UI state.
+ creatorsTab.addEventListener('click',showCreators);
+ pane.querySelector('.sh22-refresh').addEventListener('click',showJobs);
+ // If visitor opens full-screen Find Jobs elsewhere, restore the listing to its native location first.
+ document.addEventListener('click',e=>{if(e.target.closest('#discover button,#jobs .sh79-choice')){if(!pane.hidden)showCreators()}},true);
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+})();
