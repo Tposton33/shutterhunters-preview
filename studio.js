@@ -71,8 +71,8 @@ function specialtiesOf(p){const values=[p?.specialty,...(Array.isArray(p?.specia
 function primaryAndSelected(f){const primary=String(f.get('specialty')||'Weddings');return [primary,...[...$('specialtyChoices').querySelectorAll('input:checked')].map(x=>x.value).filter(x=>x!==primary)]}
 function fillForm(p){const f=$('onlineProfileForm');for(const [key,val] of Object.entries(p)){const el=f.elements.namedItem(key);if(!el||key==='specialties')continue;if(el.type==='checkbox')el.checked=!!val;else el.value=val??''}const set=new Set(p.specialties||[]);$('specialtyChoices').querySelectorAll('input').forEach(x=>x.checked=set.has(x.value));}
 function showStudio(){if(!user)return;$('studioProfileSummary').replaceChildren();const p=profile;const summary=$('studioProfileSummary');if(!p){summary.append(text('p','First, add your name, location, main specialty and rate in My Account. Then upload your creative work below.'));return}summary.append(text('h3',p.display_name),text('p',p.role+' · '+p.city+', '+p.state),text('p',specialtiesOf(p).join('  ·  ')));if(!p.is_public)summary.append(text('p','Private profile — turn on Publish in My Account when ready.'))}
-async function updateAuth(){const {data,error}=await client.auth.getUser();const before=user?.id;user=error?null:data.user;if(before!==user?.id){shActiveInquiry=null;const thread=$('shThread');if(thread)thread.hidden=true;}guest.classList.toggle('hidden',!!user);member.classList.toggle('hidden',!user);updateMenu();shSyncAccountMenu();if(!user){profile=null;v12ThemeLoadedFor=null;$('v12ThemePanel').hidden=true;loadMembership();v111LoadPlan();v111LoadSaved();return}$('signedInAs').textContent=user.email||'Signed in';await loadMembership();await v111LoadPlan();await v111LoadSaved();if(before!==user.id||!v12ThemeLoadedFor||v12ThemeLoadedFor!==user.id){v12ThemeLoadedFor=user.id;await v12LoadMyExperience()}if(before!==user.id||!profile){const q=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(q.error){say('Could not load your profile: '+q.error.message);return}profile=q.data; if(profile)fillForm(profile);showStudio();await loadMyMedia();await updateInquiryBadge()}else{await loadMyMedia()}}
-async function refreshProfile(){if(!user)return;const {data,error}=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(!error){profile=data;if(profile)fillForm(profile);showStudio();await updateInquiryBadge()}}
+async function updateAuth(){const {data,error}=await client.auth.getUser();const before=user?.id;user=error?null:data.user;if(before!==user?.id){shActiveInquiry=null;const thread=$('shThread');if(thread)thread.hidden=true;}guest.classList.toggle('hidden',!!user);member.classList.toggle('hidden',!user);updateMenu();shSyncAccountMenu();if(!user){profile=null;v12ThemeLoadedFor=null;$('v12ThemePanel').hidden=true;loadMembership();v111LoadPlan();v111LoadSaved();return}$('signedInAs').textContent=user.email||'Signed in';await loadMembership();await v111LoadPlan();await v111LoadSaved();if(before!==user.id||!v12ThemeLoadedFor||v12ThemeLoadedFor!==user.id){v12ThemeLoadedFor=user.id;await v12LoadMyExperience()}if(before!==user.id||!profile){const q=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(q.error){say('Could not load your profile: '+q.error.message);return}profile=q.data; if(profile)fillForm(profile);sh19LoadTravel().catch(console.warn);showStudio();await loadMyMedia();await updateInquiryBadge()}else{await loadMyMedia()}}
+async function refreshProfile(){if(!user)return;const {data,error}=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(!error){profile=data;if(profile)fillForm(profile);sh19LoadTravel().catch(console.warn);showStudio();await updateInquiryBadge()}}
 const forms=[$('signupForm'),$('loginForm')];
 if(!ready){forms.forEach(f=>f.querySelectorAll('input,button').forEach(x=>x.disabled=true));notice.textContent='Account configuration is missing. Upload config.js containing only your public Supabase project URL and publishable key.';return}
 // Capture the incoming recovery callback BEFORE supabase-js consumes/removes URL tokens.
@@ -170,6 +170,9 @@ $('shAccountSignout').addEventListener('click',async()=>{
 document.addEventListener('click',event=>{if(!shAccountActions.contains(event.target))shCloseAccountMenu()});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')shCloseAccountMenu()});
 
+// V19: Store travel preference separately, so existing profile columns remain unchanged.
+async function sh19LoadTravel(){if(!user)return;const input=$('sh19TravelRadius');if(!input)return;const {data,error}=await client.from('sh19_travel_preferences').select('miles').eq('user_id',user.id).maybeSingle();if(!error&&data){input.value=String(data.miles);window.sh19TravelRadius=data.miles}}
+$('sh19TravelSave')?.addEventListener('click',async()=>{if(!user)return say('Sign in to save your travel distance.');const miles=Number($('sh19TravelRadius').value);const {error}=await client.from('sh19_travel_preferences').upsert({user_id:user.id,miles},{onConflict:'user_id'});if(error)return say('Travel preference not saved: '+error.message+'. Install the V19 SQL migration.');window.sh19TravelRadius=miles;say('Preferred travel radius saved: '+miles+' miles.')});
 $('onlineProfileForm').addEventListener('submit',async e=>{e.preventDefault();if(!user)return say('Sign in first.');const f=new FormData(e.target);const additional=primaryAndSelected(f);const data={id:user.id,display_name:String(f.get('display_name')||'').trim(),city:String(f.get('city')||'').trim(),state:String(f.get('state')||'').trim().toUpperCase(),role:String(f.get('role')),specialty:String(f.get('specialty')),specialties:additional,bio:String(f.get('bio')||''),hourly_rate:f.get('hourly_rate')?Number(f.get('hourly_rate')):null,portfolio_url:validLink(String(f.get('portfolio_url')||'')),instagram_url:validLink(String(f.get('instagram_url')||'')),avatar_url:validLink(String(f.get('avatar_url')||'')),is_public:f.has('is_public'),available_for_second_shooting:f.has('available_for_second_shooting')};if(profile?.cover_url)data.cover_url=profile.cover_url;
  say('Saving your studio…');const {error}=await client.from('profiles').upsert(data,{onConflict:'id'});if(error)return say('Could not save profile: '+error.message+' — did you run the v2 SQL migration?');say('Profile saved! '+(data.is_public?'Anyone can discover your work.':'It remains private.'));await refreshProfile();await loadCreators();});
 // Storage uploads must use per-user folders and Supabase Storage RLS. Never put private files in a public bucket.
@@ -704,7 +707,7 @@ async function loadV5Comments(m,area){area.replaceChildren();const {data,error}=
 
 function startInquiry(p){if(!user){go('account');say('Sign in or create a free account to send a project inquiry.');return}if(!p||p.id===user.id)return;viewed=p;$('inquiryTo').textContent='To '+p.display_name;$('inquiryFormStatus').textContent='';$('inquiryModal').classList.remove('hidden')}
 $('closeInquiry').onclick=()=>$('inquiryModal').classList.add('hidden');$('inquiryModal').addEventListener('click',e=>{if(e.target===$('inquiryModal'))$('inquiryModal').classList.add('hidden')});
-$('inquiryForm').addEventListener('submit',async e=>{e.preventDefault();if(!user||!viewed||viewed.id===user.id)return;const f=new FormData(e.target);const row={sender_id:user.id,recipient_id:viewed.id,subject:String(f.get('subject')).trim(),message:String(f.get('message')).trim(),event_date:f.get('event_date')||null,budget:f.get('budget')?Number(f.get('budget')):null};$('inquiryFormStatus').textContent='Sending…';const {error}=await client.from('inquiries').insert(row);if(error){$('inquiryFormStatus').textContent='Could not send: '+error.message;return}$('inquiryForm').reset();$('inquiryModal').classList.add('hidden');alert('Your inquiry was sent! See it in Inquiries → Sent.');go('inquiries');mode='sent';await loadInquiries()});
+$('inquiryForm').addEventListener('submit',async e=>{e.preventDefault();if(!user||!viewed||viewed.id===user.id)return;const f=new FormData(e.target);const row={sender_id:user.id,recipient_id:viewed.id,subject:String(f.get('subject')).trim(),message:(String(f.get('location')||'').trim()?'Location: '+String(f.get('location')).trim()+'\n':'')+String(f.get('message')).trim(),event_date:f.get('event_date')||null,budget:f.get('budget')?Number(f.get('budget')):null};$('inquiryFormStatus').textContent='Sending…';const {data:created,error}=await client.from('inquiries').insert(row).select('id').single();if(error){$('inquiryFormStatus').textContent='Could not send: '+error.message;return}if(created?.id){const provision=await client.rpc('sh19_open_inquiry',{p_inquiry:created.id});if(provision.error)console.warn('V19 workflow not yet enabled:',provision.error.message)}$('inquiryForm').reset();$('inquiryModal').classList.add('hidden');alert('Your project inquiry was sent! View it in Sent Inquiries.');go('inquiries');mode='sent';await loadInquiries()});
 $('receivedTab').onclick=()=>{mode='received';loadInquiries()};$('sentTab').onclick=()=>{mode='sent';loadInquiries()};
 let shActiveInquiry=null;let shThreadLoadToken=0;
 async function shOpenThread(inquiry){
@@ -755,12 +758,33 @@ async function loadInquiries(){
   d.append(top,text('small',new Date(i.created_at).toLocaleString()+when),text('p',i.message));
   if(i.budget!==null)d.append(text('p','Budget: $'+i.budget));
   const open=text('button','✉ Open conversation →','sh-open-thread');open.type='button';open.onclick=()=>shOpenThread(i);d.append(open);
+  let wf=await client.from('sh19_inquiry_workflows').select('phase,creator_approved,client_approved').eq('inquiry_id',i.id).maybeSingle();
+  if(!wf.error&&!wf.data){await client.rpc('sh19_open_inquiry',{p_inquiry:i.id});wf=await client.from('sh19_inquiry_workflows').select('phase,creator_approved,client_approved').eq('inquiry_id',i.id).maybeSingle()}
+  if(!wf.error&&wf.data){
+   const stage=wf.data;d.append(text('p','Project status: '+String(stage.phase).replaceAll('_',' '),'sh19-stage'));
+   if(stage.phase!=='declined'&&stage.phase!=='confirmed'){
+    const controls=document.createElement('div');controls.className='sh19-actions';
+    function action(title,code){const b=text('button',title,'filter');b.type='button';b.onclick=async()=>{b.disabled=true;const {error}=await client.rpc('sh19_change_inquiry',{p_inquiry:i.id,p_action:code});if(error){alert('Action unavailable: '+error.message);b.disabled=false;return}await loadInquiries();if(typeof shLoadSchedule==='function')shLoadSchedule()};controls.append(b)}
+    if(mode==='received'&&stage.phase==='pending') {action('Interested — discuss project','interested');action('Decline inquiry','decline')}
+    if(stage.phase==='discussion'||stage.phase==='ready'){action(mode==='received'?'Approve as creator':'Approve as client','approve')}
+    if(stage.phase==='discussion'&&mode==='received'&&!stage.creator_approved)controls.append(text('small','Discuss the final details before approving.'));
+    d.append(controls)
+   }
+  }
   if(mode==='received'&&i.status==='new'){const btn=text('button','Mark reviewed','filter');btn.onclick=async()=>{const {error}=await client.from('inquiries').update({status:'reviewed'}).eq('id',i.id).eq('recipient_id',user.id);if(error)alert(error.message);else loadInquiries()};d.append(btn)}
   out.append(d)
  }
  if(shActiveInquiry){const updated=(data||[]).find(x=>x.id===shActiveInquiry.id);if(updated)shActiveInquiry=updated;else{$('shThread').hidden=true;shActiveInquiry=null}}
 }
 async function updateInquiryBadge(){if(!user)return;const {count,error}=await client.from('inquiries').select('id',{count:'exact',head:true}).eq('recipient_id',user.id).eq('status','new');if(error)return;const n=count||0;$('navInboxCount').textContent=n;$('navInboxCount').classList.toggle('hidden',!n);$('hubInboxCount').textContent=n?'('+n+' new)':''}
+// Refresh notification count while the app is open; no push permissions requested.
+let sh19PrevUnread=null;
+async function sh19PollNew(){if(!user||document.hidden)return;const {count,error}=await client.from('inquiries').select('id',{count:'exact',head:true}).eq('recipient_id',user.id).eq('status','new');if(error)return;
+ if(sh19PrevUnread!==null&&count>sh19PrevUnread){const el=$('hubInboxCount');if(el)el.title='New project inquiry received';}
+ sh19PrevUnread=count;await updateInquiryBadge();
+}
+setInterval(()=>sh19PollNew().catch(console.warn),45000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)sh19PollNew().catch(console.warn)});
 const oldGo=go;go=function(id){if(id==='profile')id='studio';oldGo(id);if(id==='studio')showStudio();if(id==='inquiries')loadInquiries()};
 
 // V11.1 enhancements. These use separate RLS-protected tables; existing portfolio records are not migrated.
@@ -1120,6 +1144,19 @@ function shRenderSpotlightDemo(strip,note,job){
   body.append(more,shSaveButton(job,d,true),shBookingText('small','Demonstration only · Not hireable','shspot-demo-notice'));card.append(cover,body);strip.append(card);
  }
 }
+function sh19DistanceCities(home,destination){
+ const cities={
+ 'sacramento':[38.5816,-121.4944],'elk grove':[38.4088,-121.3716],'roseville':[38.7521,-121.2880],
+ 'san francisco':[37.7749,-122.4194],'santa cruz':[36.9741,-122.0308],'monterey':[36.6002,-121.8947],
+ 'san jose':[37.3382,-121.8863],'stockton':[37.9577,-121.2908],'napa':[38.2975,-122.2869],
+ 'los angeles':[34.0522,-118.2437],'san diego':[32.7157,-117.1611],'fresno':[36.7378,-119.7871]
+ };
+ const city=x=>String(x||'').toLowerCase().split(',')[0].trim();let a=cities[city(home)],b=cities[city(destination)];
+ if(city(home)===city(destination)&&city(home))return 0;
+ if(!a||!b)return null;const rad=Math.PI/180,lat=(b[0]-a[0])*rad,lon=(b[1]-a[1])*rad;
+ const v=Math.sin(lat/2)**2+Math.cos(a[0]*rad)*Math.cos(b[0]*rad)*Math.sin(lon/2)**2;
+ return 3958.76*2*Math.atan2(Math.sqrt(v),Math.sqrt(1-v));
+}
 window.shShowSpotlight=async function(job){
  const panel=$('shSpotlight'),strip=$('shSpotCards'),note=$('shSpotStatus');if(!panel||!strip||!job?.id)return;const isPrivateTest=job.__privateTest===true;
  shActiveSpotJob=job;shOpenSpotlightLayer();$('shSpotDismiss').onclick=shCloseSpotlight;$('shSpotSaved').onclick=()=>window.shShowJobShortlist(job);strip.replaceChildren();note.textContent='Finding creators who match the date and specialty…';
@@ -1135,13 +1172,21 @@ window.shShowSpotlight=async function(job){
  if(!publicList.length)await loadCreators();await shDirectoryResolveTiers();
  const spec=String(job.specialty||'').toLowerCase(),city=String(job.location||'').toLowerCase().split(',')[0].trim();
  let possible=publicList.filter(p=>p.id!==job.client_id&&(!spec||specialtiesOf(p).some(s=>s.toLowerCase()===spec)));
- const scores=await Promise.all(possible.map(async p=>{let busy=false;if(job.event_date){const {data,error}=await client.rpc('sh_creator_availability',{p_creator:p.id,p_day:job.event_date});if(error)return null;busy=data==='booked'}if(busy)return null;const tier=shDirectoryTiers.get(p.id)||'free';const nearby=city&&[p.city,p.state].filter(Boolean).join(' ').toLowerCase().includes(city);return {p,tier,score:(nearby?100:0)+(tier==='studio'?20:tier==='pro'?10:0)}}));
+ const travelRows=await client.from('sh19_travel_preferences').select('user_id,miles').in('user_id',possible.map(p=>p.id));
+ const radii=new Map((travelRows.data||[]).map(r=>[r.user_id,r.miles]));
+ const scores=await Promise.all(possible.map(async p=>{let busy=false;if(job.event_date){const {data,error}=await client.rpc('sh_creator_availability',{p_creator:p.id,p_day:job.event_date});if(error)return null;busy=data==='booked'}if(busy)return null;
+ const tier=shDirectoryTiers.get(p.id)||'free';const nearby=city&&String(p.city||'').toLowerCase()===city;
+ const dist=sh19DistanceCities([p.city,p.state].filter(Boolean).join(', '),job.location);
+ const radius=radii.get(p.id)??25;
+ if(!nearby&&(dist==null||dist>radius))return null;
+ if(job.budget!=null&&p.hourly_rate!=null&&Number(p.hourly_rate)>Number(job.budget))return null;
+ return {p,tier,score:(nearby?100:Math.max(0,90-(dist||0)))+(tier==='studio'?20:tier==='pro'?10:0)}}));
  const best=scores.filter(x=>x&&(x.tier==='pro'||x.tier==='studio')).sort((a,b)=>b.score-a.score).slice(0,5);strip.replaceChildren();
  if(!best.length){note.textContent='No available Pro or Studio matches yet. Browse other creators to find more talent.';return}
  note.textContent=best.length+' available Pro/Studio creator'+(best.length===1?'':'s')+' matched for Spotlight.';
  for(const {p,tier} of best){const card=shBookingText('article',null,'shspot-card'),photo=document.createElement('img');photo.src=validLink(p.cover_url)||validLink(p.avatar_url)||IMAGES.creator1;photo.alt='Portfolio image for '+(p.display_name||'creator');photo.loading='lazy';const body=shBookingText('div',null,'shspot-body');
  body.append(shBookingText('strong',p.display_name||'Creative professional'),shBookingText('small',[p.city,p.state,specialtiesOf(p).slice(0,2).join(', ')].filter(Boolean).join(' · ')),shBookingText('small',tier==='studio'?'✦ Studio · Priority placement':tier==='pro'?'✦ Pro · Priority placement':'Creator'),shBookingText('small',job.event_date?'📷 Available for selected date':'📷 Confirm date with creator','sh-available'));if(p.hourly_rate!=null&&Number(p.hourly_rate)>0)body.append(shBookingText('small','From $'+Number(p.hourly_rate).toLocaleString()+'/hr')); 
- const open=shBookingText('button','View full profile ↗','filter');open.onclick=()=>{if(window.sh81SpotProfile)window.sh81SpotProfile(p,job);else{shCloseSpotlight();openProfile(p.id)}};const req=shBookingText('button','Request booking / contact','action');req.onclick=()=>window.shRequestBooking(job.id,p.id);body.append(open,req,shSaveButton(job,p,false));card.append(photo,body);strip.append(card)
+ const open=shBookingText('button','View full profile ↗','filter');open.onclick=()=>{if(window.sh81SpotProfile)window.sh81SpotProfile(p,job);else{shCloseSpotlight();openProfile(p.id)}};const req=shBookingText('button','Send Project Inquiry','action');req.onclick=()=>window.shRequestBooking(job.id,p.id);body.append(open,req,shSaveButton(job,p,false));card.append(photo,body);strip.append(card)
  }
  $('shSpotExplore').onclick=()=>{shCloseSpotlight();go('directory');$('shDirSpecialty').value=job.specialty||'';if(job.event_date){$('shDirDate').value=job.event_date;$('shDirAvailableOnly').checked=true}shOpenDirectory()};
  $('shSpotDismiss').onclick=shCloseSpotlight;$('shSpotSaved').onclick=()=>window.shShowJobShortlist(job);
@@ -1159,7 +1204,21 @@ async function shLoadSchedule(){
  const to=shDateLocal(new Date(shCal.month.getFullYear(),shCal.month.getMonth()+3,0));
  const {data,error}=await client.from('creator_schedule_days').select('day,status,title,notes').eq('creator_id',user.id).gte('day',from).lte('day',to).order('day');
  if(error){shCal.rows.clear();shScheduleMessage('Schedule unavailable. Install V13_5_6_SCHEDULE.sql in Supabase first. '+error.message);shRenderSchedule();return}
- shCal.rows=new Map((data||[]).map(r=>[r.day,r])); shRenderSchedule();shScheduleMessage('Your changes are stored privately in your ShutterHunters account.');
+ shCal.rows=new Map((data||[]).map(r=>[r.day,r]));
+ await sh19LoadInquiryCalendar(from,to);
+ shRenderSchedule();shScheduleMessage('Your changes are stored privately in your ShutterHunters account.');
+}
+let sh19CalItems=new Map();
+async function sh19LoadInquiryCalendar(from,to){
+ sh19CalItems=new Map();if(!user)return;
+ const result=await client.from('inquiries').select('id,subject,event_date,sender_id,recipient_id').or('sender_id.eq.'+user.id+',recipient_id.eq.'+user.id).gte('event_date',from).lte('event_date',to).limit(200);
+ if(result.error)return;
+ for(const inquiry of result.data||[]){
+  const state=await client.from('sh19_inquiry_workflows').select('phase').eq('inquiry_id',inquiry.id).maybeSingle();
+  if(state.error||!state.data||state.data.phase==='declined')continue;
+  const day=inquiry.event_date;if(!sh19CalItems.has(day))sh19CalItems.set(day,[]);
+  sh19CalItems.get(day).push({inquiry,phase:state.data.phase});
+ }
 }
 function shRenderSchedule(){
  const grid=$('shCalGrid');if(!grid)return;grid.replaceChildren();
@@ -1171,11 +1230,18 @@ function shRenderSchedule(){
   const day=shDateLocal(new Date(yr,mo,n)),record=shCal.rows.get(day),state=record?.status||'available';
   const b=document.createElement('button');b.type='button';b.className='sh-cal-day sh-day-'+state+(day===$('shCalDate').value?' selected':'')+(shCal.selected.has(day)?' sh-bulk-selected':'');
   b.setAttribute('aria-label',shDateShort(day)+': '+(state==='booked'?'booked':state==='available'?'available':'available'));
-  b.append(text('strong',String(n)),text('span','📷','sh-cal-emoji'));if(record?.title)b.append(text('small',record.title));
+  b.append(text('strong',String(n)),text('span','📷','sh-cal-emoji'));
+  const incoming=sh19CalItems.get(day)||[];
+  if(incoming.length){const mark=text('small','● '+incoming.length+' project inquiry'+(incoming.length!==1?'ies':''),'sh19-cal-tag');b.append(mark);b.classList.add('sh19-pending');b.title=incoming.map(x=>x.inquiry.subject+' — '+x.phase).join('\n')}
+  if(record?.title)b.append(text('small',record.title));
   b.onclick=()=>{if(shCal.bulk){shCal.selected.has(day)?shCal.selected.delete(day):shCal.selected.add(day);shRenderSchedule()}else shChooseDate(day)};grid.append(b);
  }
  const bulkLabel=$('shCalSelectionStatus');if(bulkLabel)bulkLabel.textContent=shCal.selected.size+' day(s) selected'+(shCal.bulk?' · Tap calendar dates to select':''); const bulkButton=$('shCalBulkMode');if(bulkButton)bulkButton.textContent=shCal.bulk?'Finish selecting':'Select multiple dates';
  const upcoming=$('shCalUpcoming');upcoming.replaceChildren();
+ for(const [day,items] of [...sh19CalItems.entries()].sort((a,b)=>a[0].localeCompare(b[0]))){for(const item of items){
+   const x=document.createElement('button');x.type='button';x.className='sh19-calendar-inquiry';x.textContent='🟡 '+shDateShort(day)+' · '+item.inquiry.subject+' · '+item.phase.replaceAll('_',' ');
+   x.onclick=()=>{go('inquiries');mode=item.inquiry.sender_id===user.id?'sent':'received';loadInquiries().then(()=>shOpenThread(item.inquiry))};upcoming.append(x);
+ }}
  const today=shDateLocal(new Date());const rows=[...shCal.rows.values()].filter(r=>r.status==='booked'&&r.day>=today).sort((a,b)=>a.day.localeCompare(b.day)).slice(0,8);
  if(!rows.length)upcoming.append(text('p','No upcoming booked dates in the loaded calendar.','subtle'));
  for(const r of rows){const d=document.createElement('div');d.className='sh-cal-upcoming-item';const tomorrow=shDateLocal(new Date(Date.now()+86400000))===r.day;d.append(text('strong',(tomorrow?'🎬 Tomorrow — ':'📷 ')+shDateShort(r.day)),text('p',r.title||'Booked / unavailable'));if(r.notes)d.append(text('small',r.notes));upcoming.append(d)}
