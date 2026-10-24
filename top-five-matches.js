@@ -391,10 +391,10 @@ window.ShutterHuntersFindJobs={open,close};
 /* V19: UI-only enhancement. Keep all V18 flows and access checks. */
 (()=>{'use strict';
 const styles=`
-/* Replace platform emoji arrow glyphs with predictable icons */
-.sh79-choice>span:last-child{font-size:0!important;display:grid!important;place-items:center;min-width:44px;height:44px;border:1px solid rgba(232,196,149,.55);border-radius:50%;background:rgba(255,255,255,.055);transition:transform .3s ease,background .3s ease}
-.sh79-choice>span:last-child::after{content:'↗';font:400 25px/1 system-ui,sans-serif;color:#f1c68d}
-.sh79-choice:hover>span:last-child,.sh79-choice:focus-visible>span:last-child{transform:translate(3px,-3px);background:rgba(255,255,255,.15)}
+/* V20: one simple non-emoji chevron on job choices. */
+.sh79-choice>span:last-child{font-size:0!important;display:grid!important;place-items:center;min-width:38px;height:38px;border:1px solid rgba(232,196,149,.32);border-radius:50%;background:transparent}
+.sh79-choice>span:last-child::after{content:'›';font:300 30px/1 Arial,sans-serif;color:#e8bc84}
+.sh79-choice:hover>span:last-child{transform:translateX(3px)}
 /* Discovery action arrows are plain typographic glyphs, never emoji */
 #discover button, #discover .sh-cinema-cta{font-variant-emoji:text}
 #discover button[onclick*="go('post')"],#discover button[onclick*="sh79FindJobs"]{transition:transform .45s ease,box-shadow .45s ease,filter .45s ease}
@@ -433,12 +433,64 @@ function init(){
   moving.forEach(el=>wrap.appendChild(el));
   function switchTo(mode){const jobs=mode==='jobs';pane.hidden=!jobs;wrap.hidden=jobs;tabs.querySelector('#sh19-jobs-tab').setAttribute('aria-selected',String(jobs));tabs.querySelector('#sh19-creators-tab').setAttribute('aria-selected',String(!jobs));}
   tabs.querySelector('#sh19-creators-tab').addEventListener('click',()=>switchTo('creators'));
-  tabs.querySelector('#sh19-jobs-tab').addEventListener('click',()=>switchTo('jobs'));
-  pane.querySelector('#sh19-open-jobs').addEventListener('click',()=>{if(typeof window.sh79FindJobs==='function')window.sh79FindJobs();else if(typeof window.go==='function')window.go('jobs')});
+  tabs.querySelector('#sh19-jobs-tab').addEventListener('click',()=>{switchTo('jobs'); if(typeof window.ShutterHuntersFindJobs?.open==='function')window.ShutterHuntersFindJobs.open(); else if(typeof window.sh79FindJobs==='function')window.sh79FindJobs();});
+  pane.querySelector('#sh19-open-jobs').addEventListener('click',()=>{if(typeof window.ShutterHuntersFindJobs?.open==='function')window.ShutterHuntersFindJobs.open();else if(typeof window.sh79FindJobs==='function')window.sh79FindJobs();});
  }
  // Make the discovery CTA draw attention without touching original click handlers.
  const hero=document.querySelector('#discover .sh-cinema-actions');
  if(hero)Array.from(hero.querySelectorAll('button')).forEach((b,i)=>{b.classList.add('sh19-reveal');b.style.animationDelay=`${i*120}ms`});
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+})();
+
+
+/* V20: Saved Creators + Saved Jobs panels, kept separate from hiring Top 5. */
+(()=>{'use strict';
+const STYLE=`
+#sh20-saved{margin:20px 0 25px;background:#fffaf0;border:1px solid #d7cbb8;border-radius:18px;padding:18px;color:#1c3332}
+#sh20-saved h3{font:400 25px/1.2 Georgia,serif;margin:0 0 12px;color:#19322e}
+#sh20-saved .sh20-entry{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 0;border-top:1px solid #e5dccd}
+#sh20-saved button,#sh20-saved a{border:1px solid #b5a58d;border-radius:9px;padding:10px 12px;background:#fff;color:#1b3734;font:600 13px system-ui,sans-serif;cursor:pointer}
+#sh20-saved p{color:#63716c;line-height:1.6}
+#shFindV14 .sh20-job-save{border:1px solid #92afc4!important;border-radius:10px!important;background:#173b54!important;color:#e7f2fc!important;padding:9px 14px!important;min-height:40px;cursor:pointer;margin:10px 0}
+.sh79-choice .sh20-chevron{font:300 28px/1 Arial,sans-serif!important;color:#e5bf8d}
+@media(max-width:600px){#sh20-saved{padding:15px}#sh20-saved .sh20-entry{align-items:flex-start;flex-direction:column}}
+`;
+function read(k){try{const a=JSON.parse(localStorage.getItem(k)||'[]');return Array.isArray(a)?a:[]}catch{return []}}
+function write(k,a){localStorage.setItem(k,JSON.stringify(a))}
+function escapeHTML(v){return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
+const CREATOR_KEY='sh5_saved_creators', JOB_KEY='sh20_saved_jobs';
+function renderSaved(){
+ const root=document.getElementById('sh20-saved');if(!root)return;
+ const creators=read(CREATOR_KEY),jobs=read(JOB_KEY);
+ root.innerHTML='<h3>Saved Candidates ('+creators.length+')</h3>'+(creators.length?creators.map(id=>'<div class="sh20-entry"><span>Saved creator profile</span><button data-saved-creator="'+escapeHTML(id)+'">View profile ↗</button><button data-remove-creator="'+escapeHTML(id)+'">Remove</button></div>').join(''):'<p>No saved creators yet. Save a candidate from their profile to see them here.</p>')+'<h3 style="margin-top:20px">Saved Jobs ('+jobs.length+')</h3>'+(jobs.length?jobs.map(j=>'<div class="sh20-entry"><div><strong>'+escapeHTML(j.title)+'</strong><p style="margin:3px 0">'+escapeHTML(j.location||'')+'</p></div><button data-open-saved-job="'+escapeHTML(j.id)+'">View job ↗</button><button data-remove-job="'+escapeHTML(j.id)+'">Remove</button></div>').join(''):'<p>No saved jobs yet. Save projects from Find Jobs to see them here.</p>');
+}
+function init(){
+ if(document.getElementById('sh20-style'))return;
+ const s=document.createElement('style');s.id='sh20-style';s.textContent=STYLE;document.head.append(s);
+ const pane=document.getElementById('sh19-creators-content'),directory=document.getElementById('directory');
+ if(pane||directory){const saved=document.createElement('section');saved.id='sh20-saved';(pane||directory).prepend(saved);renderSaved();}
+ // Never reroute a Find Jobs save action through the Top 5 hiring shortlist.
+ document.addEventListener('click',e=>{
+ const b=e.target.closest('[data-remove-creator],[data-saved-creator],[data-remove-job],[data-open-saved-job]');if(!b)return;
+ if(b.dataset.removeCreator){write(CREATOR_KEY,read(CREATOR_KEY).filter(v=>String(v)!==b.dataset.removeCreator));renderSaved();return}
+ if(b.dataset.removeJob){write(JOB_KEY,read(JOB_KEY).filter(v=>String(v.id)!==b.dataset.removeJob));renderSaved();return}
+ if(b.dataset.savedCreator){const id=b.dataset.savedCreator;if(typeof window.shTop5OpenProfile==='function')window.shTop5OpenProfile(id);else alert('Open this creator from the creator directory.');return}
+ if(b.dataset.openSavedJob){window.ShutterHuntersFindJobs?.open?.();return}
+ });
+ // Job results are rendered asynchronously; attach a Save Job action once per real listing.
+ const container=document.getElementById('shLiveJobsList');
+ function addSaveActions(){if(!container)return;const jobs=container.querySelectorAll('.job');
+ jobs.forEach(card=>{if(card.querySelector('.sh20-job-save')||card.classList.contains('sh-job-demo'))return;
+ const title=card.querySelector('h3')?.textContent?.trim();if(!title)return;
+ const id=card.dataset.jobId||card.dataset.id||card.getAttribute('data-job-id')||title;
+ const btn=document.createElement('button');btn.type='button';btn.className='sh20-job-save';btn.textContent=read(JOB_KEY).some(x=>String(x.id)===String(id))?'✓ Saved Job':'☆ Save Job';
+ btn.addEventListener('click',()=>{let list=read(JOB_KEY);if(!list.some(x=>String(x.id)===String(id)))list.push({id,title,location:card.querySelector('.location')?.textContent?.trim()||''});write(JOB_KEY,list);btn.textContent='✓ Saved Job';renderSaved()});card.append(btn);
+ });}
+ if(container){addSaveActions();let scheduled=false;new MutationObserver(()=>{if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;addSaveActions()})}).observe(container,{childList:true,subtree:false});}
+ const observer=new MutationObserver(()=>renderSaved()); // no DOM-list observer on inbox; avoid the prior freeze regression.
+ document.addEventListener('click',e=>{if(e.target.closest('[data-action="save"]'))setTimeout(renderSaved,0)});
+ document.querySelectorAll('#jobs .sh79-choice').forEach(b=>{const c=b.querySelector('span:last-child');if(c&&/↗|➡|→/.test(c.textContent||''))c.textContent='›'});
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
