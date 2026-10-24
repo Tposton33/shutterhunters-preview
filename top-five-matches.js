@@ -213,3 +213,52 @@ document.addEventListener('click',e=>{
 const oldDemoButton=document.getElementById('sh80DemoPost');if(oldDemoButton){const banner=oldDemoButton.closest('.sh80-post-demo');if(banner)banner.hidden=true;oldDemoButton.hidden=true}
 window.ShutterHuntersTopFive={open:()=>open('brief'),showMatches:()=>open('matches'),showSent:nativeInbox,close:exit,refreshDemoSent:()=>{}};
 })();
+
+
+/* ShutterHunters V14 — Live Find Jobs workspace. Additive to preserved V13. */
+(()=>{'use strict';if(window.__shFindJobsV14)return;window.__shFindJobsV14=true;
+const css=`
+#shFindV14{position:fixed;inset:0;z-index:2147483000;overflow:auto;overscroll-behavior:contain;background:radial-gradient(circle at 85% 3%,#183852 0%,transparent 42%),linear-gradient(155deg,#071726 0%,#0b2435 58%,#061522 100%);color:#f0f5f8;padding:env(safe-area-inset-top) max(12px,env(safe-area-inset-right)) env(safe-area-inset-bottom) max(12px,env(safe-area-inset-left));box-sizing:border-box}
+#shFindV14[hidden]{display:none!important}body.sh-find14-open{overflow:hidden!important}
+#shFindV14 .sh-find-shell{max-width:1120px;margin:auto;padding:22px 0 85px}
+#shFindV14 .sh-find-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+#shFindV14 .sh-find-brand{font-size:13px;font-weight:800;letter-spacing:2px;color:#c3d7e6}
+#shFindV14 .sh-find-close{border:1px solid #9ebbd066;background:#112e41;color:white;border-radius:999px;padding:12px 18px;cursor:pointer}
+#shFindV14 .sh-find-hero{padding:clamp(20px,5vw,58px) 0 24px}
+#shFindV14 .sh-find-kicker{font-size:11px;letter-spacing:3px;color:#a4cce0;text-transform:uppercase;font-weight:700}
+#shFindV14 h1{font:500 clamp(40px,7vw,84px)/1.03 Georgia,serif;color:#fff;margin:13px 0 16px;letter-spacing:-.04em}
+#shFindV14 .sh-find-hero p{font-size:clamp(14px,2vw,18px);max-width:640px;color:#bdd0df;line-height:1.65}
+#shFindV14 .sh-find-content{display:grid;gap:18px}
+#shFindV14 #sh82Search{display:block!important;background:#102b40!important;color:#eef6fc!important;border:1px solid #ffffff24!important;border-radius:22px!important;padding:clamp(16px,3vw,28px)!important;margin:0!important;box-shadow:0 24px 75px #0003;max-width:none!important}
+#shFindV14 #sh82Search h2,#shFindV14 #sh82Search .sh77-kicker,#shFindV14 #sh82Search p,#shFindV14 #sh82Search label{color:#ecf5fd!important}
+#shFindV14 #sh82Search input,#shFindV14 #sh82Search select{max-width:100%;min-width:0;box-sizing:border-box}
+#shFindV14 .sh-find-list{background:#0c2233;border:1px solid #ffffff19;border-radius:22px;padding:clamp(15px,3vw,28px)}
+#shFindV14 .sh-find-list h2{font:500 34px/1.1 Georgia,serif;margin:3px 0 9px;color:white}
+#shFindV14 .sh-find-list .sh-find-desc{color:#abc3d3;margin:0 0 20px;font-size:14px}
+#shFindV14 #shLiveJobsList{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px}
+#shFindV14 #shLiveJobsList .job{background:#fff!important;color:#183043;border-radius:16px;padding:20px;margin:0;box-shadow:none}
+#shFindV14 #shLiveJobsList .job h3{color:#16374b}
+#shFindV14 #shLiveJobsStatus{color:#c4d8e5!important}
+#shFindV14 .sh-find-empty{border:1px dashed #688da4;padding:24px;border-radius:15px;color:#c6d7e3;line-height:1.5}
+@media(max-width:700px){#shFindV14 .sh-find-shell{padding-top:12px}#shFindV14 .sh-find-hero{padding:30px 4px 16px}#shFindV14 .sh-find-content{gap:12px}#shFindV14 #sh82Search .sh82-fields{grid-template-columns:1fr!important}#shFindV14 .sh-find-close{padding:10px 13px}#shFindV14 #sh82Search{width:100%!important}}
+#sh82DemoMarketplace,#jobslist,#sh80DemoLaunch{display:none!important}
+`;
+const style=document.createElement('style');style.id='shFindV14Styles';style.textContent=css;document.head.append(style);
+let overlay=null,search=null,list=null,status=null,anchors=[],lastFocus=null;
+function anchor(node){const mark=document.createComment('sh-v14-original-position');node.parentNode.insertBefore(mark,node);anchors.push([node,mark]);return node}
+function restore(){for(const [node,mark] of anchors){if(mark.parentNode){mark.parentNode.insertBefore(node,mark);mark.remove()}}anchors=[]}
+function close(){if(!overlay||overlay.hidden)return;overlay.hidden=true;document.body.classList.remove('sh-find14-open');restore();if(lastFocus?.focus)lastFocus.focus()}
+function open(){if(!document.getElementById('jobs'))return;lastFocus=document.activeElement; if(typeof window.go==='function')window.go('jobs');if(!overlay){overlay=document.createElement('section');overlay.id='shFindV14';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','Find Jobs');overlay.hidden=true;overlay.innerHTML='<div class="sh-find-shell"><div class="sh-find-top"><strong class="sh-find-brand">SHUTTERHUNTERS / OPPORTUNITIES</strong><button type="button" class="sh-find-close">Close ×</button></div><div class="sh-find-hero"><div class="sh-find-kicker">Discover / Find Jobs</div><h1>Find work worth<br>creating for.</h1><p>Real opportunities from real clients. Find the right shoot by location, travel distance, budget and availability.</p></div><div class="sh-find-content"><div id="shFindFilters"></div><section class="sh-find-list"><span class="sh-find-kicker">AVAILABLE OPPORTUNITIES</span><h2>Open projects.</h2><p class="sh-find-desc">Browse live projects, save your favorites and explore the details.</p><div id="shFindStatus"></div><div id="shFindResults"></div></section></div></div>';document.getElementById('jobs').append(overlay);overlay.querySelector('.sh-find-close').addEventListener('click',close);overlay.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();close()}})}
+search=document.getElementById('sh82Search');list=document.getElementById('shLiveJobsList');status=document.getElementById('shLiveJobsStatus');if(!search||!list||!status)return;
+overlay.querySelector('#shFindFilters').append(anchor(search));overlay.querySelector('#shFindResults').append(anchor(list));overlay.querySelector('#shFindStatus').append(anchor(status));
+const heading=search.querySelector('.sh82-search-head p');if(heading)heading.textContent='Filter real ShutterHunters opportunities by location, pay, shoot type and availability.';
+overlay.hidden=false;document.body.classList.add('sh-find14-open');overlay.scrollTop=0;overlay.querySelector('.sh-find-close').focus({preventScroll:true});
+if(typeof window.shLoadRealJobs==='function')Promise.resolve(window.shLoadRealJobs()).catch(()=>{});
+}
+function isFind(e){const t=e.target.closest('button,a');if(!t||t.closest('#shFindV14'))return false;if(t.classList.contains('sh79-find'))return true;const h=(t.getAttribute('onclick')||'').toLowerCase();const label=(t.innerText||t.textContent||'').trim().toLowerCase();return (h.includes("go('jobs')")||h.includes('sh79findjobs'))&&(label.includes('find jobs')||label.includes('find work'))}
+document.addEventListener('click',e=>{if(isFind(e)){e.preventDefault();e.stopImmediatePropagation();open()}},true);
+// Existing inline navigation and Find Jobs tabs also enter the same live experience.
+function init(){window.sh79FindJobs=open;const demo=document.getElementById('sh82DemoMarketplace');if(demo)demo.hidden=true;const p=document.querySelector('#sh82Search .sh82-search-head p');if(p)p.textContent='Search current ShutterHunters member opportunities.';}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+window.ShutterHuntersFindJobs={open,close};
+})();
