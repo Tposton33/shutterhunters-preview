@@ -979,6 +979,32 @@ window.shPublishJob=async function(form){const status=$('shPostJobStatus'),submi
 
 
 
+
+// ShutterHunters live cinematic hiring bridge (V10). Uses the existing authenticated studio client.
+window.shTop5PublishJob=async function(values){
+ const viewer=await shGetViewer();if(!viewer)throw Error('Please sign in to publish a real job.');
+ const clean={client_id:viewer.id,title:String(values.title||'').trim().slice(0,100),location:String(values.location||'').trim().slice(0,80),specialty:String(values.specialty||'').trim(),details:String(values.details||'').trim().slice(0,1000),budget:values.budget,event_date:values.event_date||null};
+ const {data,error}=await client.from('sh_job_posts').insert(clean).select('id,client_id,title').single();
+ if(error)throw Error('Could not publish your job: '+error.message);
+ window.shLoadRealJobs?.().catch(()=>{});
+ return data;
+};
+window.shTop5EligibleCreators=async function(){
+ const {data:members,error:memError}=await client.from('creator_memberships').select('user_id,tier,status').eq('status','active').in('tier',['pro','studio']).limit(500);
+ if(memError)throw Error('Could not check active memberships: '+memError.message);
+ const ids=[...new Set((members||[]).map(x=>x.user_id).filter(Boolean))];if(!ids.length)return [];
+ const {data,error}=await client.from('profiles').select('id,display_name,city,state,role,specialty,specialties,hourly_rate,avatar_url,cover_url,bio,is_public').eq('is_public',true).in('id',ids).limit(500);
+ if(error)throw Error('Could not load creator profiles: '+error.message);
+ return data||[];
+};
+window.shTop5SendInquiry=async function(input){
+ const viewer=await shGetViewer();if(!viewer)throw Error('Sign in to send an inquiry.');
+ if(viewer.id===input.recipient_id)throw Error('You cannot send yourself a project inquiry.');
+ const {error}=await client.from('inquiries').insert({sender_id:viewer.id,recipient_id:input.recipient_id,subject:String(input.subject||'Project inquiry').slice(0,110),message:String(input.message||'').slice(0,4000),budget:input.budget,event_date:input.event_date||null});
+ if(error)throw Error('Could not send inquiry: '+error.message);
+};
+window.shTop5OpenProfile=async function(id){await shOpenProfileLoaded(id)};
+
 // V13.5.9 — Real account booking requests and member-only, private dashboards.
 // No billing/contract claims: this booking flow is scheduling-only until the secure checkout is built.
 const shBookingText=(tag,content,klass)=>shJobEl(tag,content,klass);
