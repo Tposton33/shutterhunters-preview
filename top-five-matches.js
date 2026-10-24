@@ -603,12 +603,36 @@ function draw(){const parent=$('#sh22-inline-jobs #shLiveJobsList');if(!parent)r
  shell.append(head,d('h3','sh23-title',job?.title||card.querySelector('h3')?.textContent||'Creative opportunity'));
  const meta=d('div','sh23-meta');meta.append(fact('LOCATION',val(job?.location||card.querySelector('.sh-job-meta')?.textContent?.split(' · ')[0])),fact('PROJECT PAY',job?.budget!=null?'$'+Number(job.budget).toLocaleString():'Not listed'),fact('SHOOT DATE',job?.event_date?new Date(job.event_date+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'Flexible'),fact('TYPE OF SHOOT',val(job?.specialty||card.querySelector('.sh-job-meta')?.textContent?.split(' · ')[1])));shell.append(meta);
  shell.append(d('p','sh23-desc',String(job?.details||card.querySelector('p')?.textContent||'').slice(0,200)));
- const actions=d('div','sh23-actions'),main=d('button','sh23-apply',isMine?'View your listing':'Express Interest'),save=d('button','sh23-save','Save Job');main.type=save.type='button';
- main.addEventListener('click',()=>{if(isMine){const details=card.querySelector('.sh81-view-job');details?.click();return}const apply=[...(original?.querySelectorAll('button')||[])].find(b=>/Send proposal|Unlock Pro/i.test(b.textContent));if(!apply){alert('This project is not available for applications.');return}if(/Unlock Pro/.test(apply.textContent)){apply.click();return}apply.click();const form=card.querySelector('.sh-proposal-box');const ta=form?.querySelector('textarea');if(ta&&!ta.value.trim()){ta.value=`Hello! I’m interested in your ${job?.title||'creative'} project${job?.event_date?' on '+job.event_date:''}. I’m a ShutterHunters creator, and I’d love to discuss how I can help. Please review my creator profile on ShutterHunters to see my portfolio and experience. Thank you!`;}form?.scrollIntoView({behavior:'smooth',block:'nearest'});main.textContent='Complete Inquiry Below';});
+ const actions=d('div','sh23-actions'),main=d('button','sh23-apply',isMine?'View Your Listing':'Message Client'),save=d('button','sh23-save','Save Job');main.type=save.type='button';
+ main.addEventListener('click',async()=>{
+  if(isMine){card.querySelector('.sh81-view-job')?.click();return}
+  const apply=[...(original?.querySelectorAll('button')||[])].find(b=>/Send proposal|Unlock Pro/i.test(b.textContent));
+  if(!apply){alert('Messaging is not available for this project.');return}
+  if(/Unlock Pro/i.test(apply.textContent)){apply.click();return}
+  if(!me){alert('Please sign in to message this client.');return}
+  const existing=card.querySelector('.sh-proposal-box');
+  if(!existing)apply.click();
+  const form=card.querySelector('.sh-proposal-box');
+  const field=form?.querySelector('textarea');
+  if(!form||!field){alert('Could not open the inquiry form. Please try again.');return}
+  if(!field.value.trim()){
+   let myName='';try{const result=await api()?.from('profiles').select('display_name,is_public').eq('id',me).maybeSingle();myName=result?.data?.display_name||''}catch(e){}
+   field.value=`Hi! ${myName?'I’m '+myName+', and I’m':'I’m'} interested in your ${job?.title||'creative'} project${job?.event_date?' on '+job.event_date:''}. I’d love to be considered. You can view my ShutterHunters creator profile and portfolio through my account here. I look forward to hearing more about the project!`;
+  }
+  const send=form.querySelector('button[type="submit"]');
+  if(!send){form.scrollIntoView({behavior:'smooth',block:'nearest'});return}
+  // A tap on Message Client deliberately sends the prepared message through the site's existing job proposal RPC.
+  // Avoid double sending while the asynchronous submission runs.
+  if(main.disabled)return;
+  main.disabled=true;main.textContent='Sending message…';
+  form.requestSubmit(send);
+  setTimeout(()=>{const feedback=form.querySelector('.sh-job-status')?.textContent||'';if(/sent|submitted/i.test(feedback)){main.textContent='Message Sent';main.disabled=true;}else{main.textContent='Message Client';main.disabled=false;if(feedback&&/error|failed|permission|denied/i.test(feedback))alert(feedback)}},1300);
+ });
  const nativeSave=[...(original?.querySelectorAll('button')||[])].find(b=>/Save Job/i.test(b.textContent));save.addEventListener('click',()=>{const alternate=card.querySelector('.sh20-job-save');(nativeSave||alternate)?.click();save.textContent='Saved ✓'});
  actions.append(main,save);shell.append(actions);
- const note=d('p','sh23-state',isMine?'This is your listing. Applicants will contact you through your Inbox.':'Your message can be edited before submission. Sending it creates an inquiry through the existing ShutterHunters system.');shell.append(note);
- if(isMine&&original){const manage=d('details','sh23-manage'),summary=d('summary','','Manage this listing');manage.append(summary,original);shell.append(manage)}
+ const note=d('p','sh23-state',isMine?'This is your listing. Applicants can contact you through Inquiries.':'Message Client sends an automatic introduction with your ShutterHunters account attached through the existing inquiry system.');shell.append(note);
+ // Keep native job controls in the DOM for existing handlers, but do not display Manage This Listing in the card.
+
  card.prepend(shell);card.classList.add('sh23-job','sh23-enhanced');
  }}
 function addDiscovery(){const section=$('#discover');if(!section||$('#sh23-discovery-strip'))return;const strip=d('div','sh23-discovery-strip');strip.id='sh23-discovery-strip';for(const [n,t,s] of [['01 / DISCOVER','Find your next project','Explore real opportunities from creative clients.'],['02 / CONNECT','Meet your people','Discover the right creator for your vision.'],['03 / CREATE','Make something remarkable','Turn a good idea into your next great project.']]){const item=d('div','sh23-discovery-step');item.append(d('small','',n),d('strong','',t),d('p','',s));strip.append(item)}const hero=section.querySelector('.hero,.sh79-hero')||section.firstElementChild;if(hero?.parentNode===section)hero.after(strip);else section.append(strip)}
