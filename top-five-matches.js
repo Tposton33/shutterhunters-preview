@@ -575,12 +575,18 @@ const CSS23=`
 #directory .sh23-job .sh23-manage summary{font-size:13px;font-weight:700;cursor:pointer;color:#183d49}
 #directory .sh23-job .sh23-manage .sh-job-controls{display:flex!important;flex-wrap:wrap!important;gap:6px;margin-top:10px}
 #directory .sh23-job .sh23-manage button{font-size:12px!important;padding:10px!important;min-height:38px!important}
-#discover .sh23-discovery-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:32px auto 50px;max-width:1080px;width:calc(100% - 42px);position:relative;z-index:1}
-#discover .sh23-discovery-step{padding:19px;background:linear-gradient(135deg,#142b31b8,#071c23cf);border:1px solid #e4c09255;border-radius:16px;color:#edf2ee;backdrop-filter:blur(8px)}
-#discover .sh23-discovery-step small{font:700 11px system-ui;letter-spacing:.16em;color:#e1b781}
-#discover .sh23-discovery-step strong{display:block;margin:8px 0;font:normal 23px Georgia,serif}
-#discover .sh23-discovery-step p{color:#c6d7d4;font:13px/1.5 system-ui;margin:0}
-@media(max-width:640px){#directory .sh22-inline-jobs .job.sh23-job{padding:15px!important}#directory .sh23-job .sh23-meta{gap:7px}#directory .sh23-job .sh23-actions{grid-template-columns:1fr auto}#discover .sh23-discovery-strip{grid-template-columns:1fr;gap:9px;margin:16px auto 36px}#discover .sh23-discovery-step{padding:14px 17px}#discover .sh23-discovery-step strong{font-size:20px}}
+#discover .sh25-discovery-band{display:grid;grid-template-columns:1.2fr .8fr;gap:18px;margin:28px auto 50px;max-width:1080px;width:calc(100% - 42px);position:relative;z-index:1;align-items:stretch}
+#discover .sh25-discovery-lead,#discover .sh25-discovery-notes{background:linear-gradient(135deg,#142b31d4,#081e26e2);border:1px solid #e4c09240;border-radius:18px;backdrop-filter:blur(10px)}
+#discover .sh25-discovery-lead{padding:24px 24px 22px;color:#edf2ee;box-shadow:0 20px 50px #00000022}
+#discover .sh25-kicker{display:block;font:700 11px system-ui;letter-spacing:.18em;color:#e1b781;text-transform:uppercase;margin-bottom:10px}
+#discover .sh25-discovery-lead strong{display:block;font:normal clamp(24px,3vw,34px)/1.1 Georgia,serif;margin:0 0 10px;color:#fff9ef}
+#discover .sh25-discovery-lead p{margin:0;color:#c6d7d4;font:14px/1.65 system-ui}
+#discover .sh25-discovery-notes{display:grid;grid-template-columns:1fr;gap:0;padding:10px 0}
+#discover .sh25-note{padding:14px 18px;color:#eff4ef}
+#discover .sh25-note + .sh25-note{border-top:1px solid #ffffff14}
+#discover .sh25-note strong{display:block;font:600 15px/1.35 system-ui;margin-bottom:4px;color:#f6e4c2}
+#discover .sh25-note p{margin:0;color:#c8d5d3;font:13px/1.55 system-ui}
+@media(max-width:640px){#directory .sh22-inline-jobs .job.sh23-job{padding:15px!important}#directory .sh23-job .sh23-meta{gap:7px}#directory .sh23-job .sh23-actions{grid-template-columns:1fr auto}#discover .sh25-discovery-band{grid-template-columns:1fr;gap:10px;margin:16px auto 34px;width:calc(100% - 28px)}#discover .sh25-discovery-lead{padding:18px 18px 16px}#discover .sh25-discovery-lead strong{font-size:24px}#discover .sh25-note{padding:13px 16px}}
 `;
 const $=s=>document.querySelector(s);
 function d(tag,cls,value){const e=document.createElement(tag);if(cls)e.className=cls;if(value!==undefined)e.textContent=value;return e}
@@ -635,7 +641,7 @@ function draw(){const parent=$('#sh22-inline-jobs #shLiveJobsList');if(!parent)r
 
  card.prepend(shell);card.classList.add('sh23-job','sh23-enhanced');
  }}
-function addDiscovery(){const section=$('#discover');if(!section||$('#sh23-discovery-strip'))return;const strip=d('div','sh23-discovery-strip');strip.id='sh23-discovery-strip';for(const [n,t,s] of [['01 / DISCOVER','Find your next project','Explore real opportunities from creative clients.'],['02 / CONNECT','Meet your people','Discover the right creator for your vision.'],['03 / CREATE','Make something remarkable','Turn a good idea into your next great project.']]){const item=d('div','sh23-discovery-step');item.append(d('small','',n),d('strong','',t),d('p','',s));strip.append(item)}const hero=section.querySelector('.hero,.sh79-hero')||section.firstElementChild;if(hero?.parentNode===section)hero.after(strip);else section.append(strip)}
+function addDiscovery(){const section=$('#discover');if(!section||$('#sh25-discovery-band'))return;const band=d('section','sh25-discovery-band');band.id='sh25-discovery-band';const lead=d('div','sh25-discovery-lead');lead.append(d('span','sh25-kicker','Why ShutterHunters'),d('strong','',"A smoother way to book talent or land your next project."),d('p','',"Browse opportunities, connect with creatives, and keep everything organized in one clean place."));const notes=d('div','sh25-discovery-notes');[['Post a Job','Tell creators exactly what you need and meet the best matches fast.'],['Find Jobs','Discover real projects from clients looking for creative professionals.'],['Built for creators','Save profiles, save jobs, and keep your inbox and bookings together.']].forEach(([t,s])=>{const item=d('div','sh25-note');item.append(d('strong','',t),d('p','',s));notes.append(item)});band.append(lead,notes);const hero=section.querySelector('.hero,.sh79-hero')||section.firstElementChild;if(hero?.parentNode===section)hero.after(band);else section.append(band)}
 function init(){if($('#sh23-style'))return;const s=d('style');s.id='sh23-style';s.textContent=CSS23;document.head.append(s);addDiscovery();const list=$('#shLiveJobsList');if(list){let frame=false;const observer=new MutationObserver(()=>{if(frame)return;frame=true;requestAnimationFrame(()=>{frame=false;draw()})});observer.observe(list,{childList:true});draw()};document.addEventListener('click',e=>{if(e.target.closest('#sh21-jobs,.sh22-refresh')){loadExtra();setTimeout(draw,180)}if(e.target.closest('#sh21-creators,#discover button,#jobs .sh79-choice,#shFindV14'))cleanCards();},true);loadExtra();}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
