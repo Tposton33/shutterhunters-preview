@@ -271,22 +271,60 @@ const css=`
 const style=document.createElement('style');style.id='shFindV14Styles';style.textContent=css;document.head.append(style);
 let overlay=null,search=null,list=null,status=null,anchors=[],lastFocus=null,checking=false;
 function lockScreen(message){let el=document.getElementById('shFindV15Lock');if(!el){el=document.createElement('div');el.id='shFindV15Lock';el.hidden=true;el.innerHTML='<div class="sh15-lock-inner" role="dialog" aria-modal="true" aria-labelledby="sh15-title"><span style="letter-spacing:.19em;color:#dfb886;font-size:12px">SHUTTERHUNTERS / MEMBER ACCESS</span><h2 id="sh15-title">Find Jobs is for members.</h2><p id="sh15-lock-msg"></p><div><button type="button" data-sh15="upgrade">Explore memberships ↗</button><button type="button" data-sh15="close" class="sh15-secondary">Close</button></div></div>';document.body.appendChild(el);el.addEventListener('click',e=>{const a=e.target.closest('[data-sh15]')?.dataset.sh15;if(!a)return;el.hidden=true;if(a==='upgrade'&&typeof window.go==='function')window.go('membership')});}el.querySelector('#sh15-lock-msg').textContent=message;el.hidden=false;}
-async function hasFindJobsAccess(){const db=getBridge();if(!db)return {allowed:false,message:'Sign in with an active Pro or Studio membership to access Find Jobs.'};try{const {data:{user},error:authError}=await db.auth.getUser();if(authError||!user)return {allowed:false,message:'Please sign in and activate a Pro or Studio membership to access Find Jobs.'};const {data,error}=await db.from('creator_memberships').select('tier,status').eq('user_id',user.id).eq('status','active').in('tier',['pro','studio']).limit(1);if(error){console.warn('Find Jobs membership check:',error.message);return {allowed:false,message:'We could not verify your membership right now. Please try again.'};}return {allowed:!!data?.length,message:'Find Jobs is available to active Pro and Studio subscribers. Upgrade to browse opportunities.'};}catch(err){console.warn('Find Jobs membership verification failed',err);return {allowed:false,message:'Membership verification is temporarily unavailable. Please try again.'}}}
+async function hasFindJobsAccess(){
+ const db=getBridge();
+ if(!db)return {allowed:false,message:'Membership services are not available. Refresh the page and sign in again.'};
+ try{
+  const {data:sessionData,error:authError}=await db.auth.getUser();
+  const user=sessionData?.user;
+  if(authError||!user)return {allowed:false,message:'Sign in to your account to access Find Jobs.'};
+  // Use the same single-record membership lookup as studio.js.
+  const {data:membership,error}=await db.from('creator_memberships').select('tier,status').eq('user_id',user.id).maybeSingle();
+  if(error)return {allowed:false,message:'Could not verify your subscription: '+error.message};
+  const allowed=membership?.status==='active'&&['pro','studio'].includes(String(membership?.tier||'').toLowerCase());
+  return {allowed,message:allowed?'':'Find Jobs requires an active Pro or Studio membership. Your account currently shows '+(membership?.tier||'no membership')+' ('+(membership?.status||'inactive')+').'};
+ }catch(err){return {allowed:false,message:'Membership verification failed: '+(err?.message||'Please try again.')};}
+}
 
 function anchor(node){const mark=document.createComment('sh-v14-original-position');node.parentNode.insertBefore(mark,node);anchors.push([node,mark]);return node}
 function restore(){for(const [node,mark] of anchors){if(mark.parentNode){mark.parentNode.insertBefore(node,mark);mark.remove()}}anchors=[]}
 function close(){if(!overlay||overlay.hidden)return;overlay.hidden=true;document.body.classList.remove('sh-find14-open');restore();if(lastFocus?.focus)lastFocus.focus()}
-async function open(){if(checking)return;if(!document.getElementById('jobs'))return;checking=true;let access;try{access=await hasFindJobsAccess()}finally{checking=false}if(!access.allowed){lockScreen(access.message);return;}lastFocus=document.activeElement; if(typeof window.go==='function')window.go('jobs');if(!overlay){overlay=document.createElement('section');overlay.id='shFindV14';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','Find Jobs');overlay.hidden=true;overlay.innerHTML='<div class="sh-find-shell"><div class="sh-find-top"><strong class="sh-find-brand">SHUTTERHUNTERS / OPPORTUNITIES</strong><button type="button" class="sh-find-close">Close ×</button></div><div class="sh-find-hero"><div class="sh-find-kicker">Discover / Find Jobs</div><h1>Find work worth<br>creating for.</h1><p>Real opportunities from real clients. Find the right shoot by location, travel distance, budget and availability.</p></div><div class="sh-find-content"><div id="shFindFilters"></div><section class="sh-find-list"><span class="sh-find-kicker">AVAILABLE OPPORTUNITIES</span><h2>Open projects.</h2><p class="sh-find-desc">Browse live projects, save your favorites and explore the details.</p><div id="shFindStatus"></div><div id="shFindResults"></div></section></div></div>';document.getElementById('jobs').append(overlay);overlay.querySelector('.sh-find-close').addEventListener('click',close);overlay.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();close()}})}
-search=document.getElementById('sh82Search');list=document.getElementById('shLiveJobsList');status=document.getElementById('shLiveJobsStatus');if(!search||!list||!status)return;
-overlay.querySelector('#shFindFilters').append(anchor(search));overlay.querySelector('#shFindResults').append(anchor(list));overlay.querySelector('#shFindStatus').append(anchor(status));
-const heading=search.querySelector('.sh82-search-head p');if(heading)heading.textContent='Filter real ShutterHunters opportunities by location, pay, shoot type and availability.';
-overlay.hidden=false;document.body.classList.add('sh-find14-open');overlay.scrollTop=0;overlay.querySelector('.sh-find-close').focus({preventScroll:true});
-if(typeof window.shLoadRealJobs==='function')Promise.resolve(window.shLoadRealJobs()).catch(()=>{});
+async function open(){
+ if(checking)return;
+ checking=true;
+ try{
+  const jobs=document.getElementById('jobs');
+  if(!jobs){lockScreen('Could not find the Jobs section. Please refresh ShutterHunters.');return;}
+  const access=await hasFindJobsAccess();
+  if(!access.allowed){lockScreen(access.message);return;}
+  lastFocus=document.activeElement;
+  if(typeof window.go==='function')window.go('jobs');
+  else {document.querySelectorAll('main').forEach(m=>m.classList.toggle('hidden',m.id!=='jobs'));}
+  if(!overlay){
+   overlay=document.createElement('section');overlay.id='shFindV14';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','Find Jobs');overlay.hidden=true;
+   overlay.innerHTML='<div class="sh-find-shell"><div class="sh-find-top"><strong class="sh-find-brand">SHUTTERHUNTERS / OPPORTUNITIES</strong><button type="button" class="sh-find-close">Close ×</button></div><div class="sh-find-hero"><div class="sh-find-kicker">Discover / Find Jobs</div><h1>Find work worth<br>creating for.</h1><p>Real opportunities from real clients. Find the right shoot by location, travel distance, budget and availability.</p></div><div class="sh-find-content"><div id="shFindFilters"></div><section class="sh-find-list"><span class="sh-find-kicker">AVAILABLE OPPORTUNITIES</span><h2>Open projects.</h2><p class="sh-find-desc">Browse live projects, save your favorites and explore the details.</p><div id="shFindStatus"></div><div id="shFindResults"></div></section></div></div>';
+   // Attach to document.body so Jobs-section visibility rules cannot hide the workspace.
+   document.body.appendChild(overlay);
+   overlay.querySelector('.sh-find-close').addEventListener('click',close);
+   overlay.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();close()}});
+  }
+  search=document.getElementById('sh82Search');list=document.getElementById('shLiveJobsList');status=document.getElementById('shLiveJobsStatus');
+  if(!search||!list||!status){lockScreen('The Find Jobs filters have not loaded. Refresh the website.');return;}
+  if(search.parentElement!==overlay.querySelector('#shFindFilters'))overlay.querySelector('#shFindFilters').append(anchor(search));
+  if(list.parentElement!==overlay.querySelector('#shFindResults'))overlay.querySelector('#shFindResults').append(anchor(list));
+  if(status.parentElement!==overlay.querySelector('#shFindStatus'))overlay.querySelector('#shFindStatus').append(anchor(status));
+  const heading=search.querySelector('.sh82-search-head p');if(heading)heading.textContent='Filter real ShutterHunters opportunities by location, pay, shoot type and availability.';
+  overlay.hidden=false;document.body.classList.add('sh-find14-open');overlay.scrollTop=0;
+  overlay.querySelector('.sh-find-close').focus({preventScroll:true});
+  if(typeof window.shLoadRealJobs==='function')Promise.resolve(window.shLoadRealJobs()).catch(err=>console.warn('Find Jobs load:',err));
+ }catch(err){console.error('Find Jobs navigation:',err);lockScreen('Unable to open Find Jobs: '+(err?.message||'Please refresh and try again.'));}
+ finally{checking=false;}
 }
+
 function isFind(e){const t=e.target.closest('button,a');if(!t||t.closest('#shFindV14'))return false;if(t.classList.contains('sh79-find'))return true;const h=(t.getAttribute('onclick')||'').toLowerCase();const label=(t.innerText||t.textContent||'').trim().toLowerCase();return (h.includes("go('jobs')")||h.includes('sh79findjobs'))&&(label.includes('find jobs')||label.includes('find work'))}
 document.addEventListener('click',e=>{if(isFind(e)){e.preventDefault();e.stopImmediatePropagation();open()}},true);
 // Existing inline navigation and Find Jobs tabs also enter the same live experience.
-function init(){window.sh79FindJobs=open;const demo=document.getElementById('sh82DemoMarketplace');if(demo)demo.hidden=true;const p=document.querySelector('#sh82Search .sh82-search-head p');if(p)p.textContent='Search current ShutterHunters member opportunities.';}
+function init(){window.sh79FindJobs=()=>{open()};const demo=document.getElementById('sh82DemoMarketplace');if(demo)demo.hidden=true;const p=document.querySelector('#sh82Search .sh82-search-head p');if(p)p.textContent='Search current ShutterHunters member opportunities.';}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 window.ShutterHuntersFindJobs={open,close};
 })();
