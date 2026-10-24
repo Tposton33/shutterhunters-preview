@@ -157,5 +157,5 @@ const sh5Observer=new MutationObserver(mutations=>{
 const sh5InquiryList=document.getElementById('inquiryList');if(sh5InquiryList)sh5Observer.observe(sh5InquiryList,{childList:true});
 document.addEventListener('click',e=>{if(e.target.closest('#sentTab'))renderDemoSentSoon()},true);
 
-window.ShutterHuntersTopFive={openDemo:()=>open('brief'),showMatches:()=>open('matches'),showSent:nativeInbox,close:exit};
+window.ShutterHuntersTopFive={openDemo:()=>open('brief'),showMatches:()=>open('matches'),showSent:nativeInbox,refreshDemoSent:renderDemoSent,close:exit};
 })();

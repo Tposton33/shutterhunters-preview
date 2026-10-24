@@ -775,6 +775,9 @@ async function loadInquiries(){
   out.append(d)
  }
  if(shActiveInquiry){const updated=(data||[]).find(x=>x.id===shActiveInquiry.id);if(updated)shActiveInquiry=updated;else{$('shThread').hidden=true;shActiveInquiry=null}}
+ // Keep fictional Top Five test invitations in the native Sent tab after database repaint.
+ // They are explicitly local-only; real messages still come exclusively from Supabase.
+ if(mode==='sent')window.ShutterHuntersTopFive?.refreshDemoSent?.();
 }
 async function updateInquiryBadge(){if(!user)return;const {count,error}=await client.from('inquiries').select('id',{count:'exact',head:true}).eq('recipient_id',user.id).eq('status','new');if(error)return;const n=count||0;$('navInboxCount').textContent=n;$('navInboxCount').classList.toggle('hidden',!n);$('hubInboxCount').textContent=n?'('+n+' new)':''}
 // Refresh notification count while the app is open; no push permissions requested.
