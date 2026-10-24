@@ -544,3 +544,74 @@ function init(){
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
+
+
+/* V23 — compact in-place job cards; native job/proposal functions are preserved. */
+(()=>{'use strict';
+const CSS23=`
+#directory .sh22-inline-jobs{background:linear-gradient(155deg,#0c283c,#09202f);}
+#directory .sh22-inline-jobs .sh22-job-list{gap:16px}
+#directory .sh22-inline-jobs .job.sh23-job{background:#f9f7f2!important;border:1px solid #deccaf!important;border-radius:20px!important;box-shadow:0 12px 25px #0002!important;padding:20px!important;color:#142b35!important}
+#directory .sh23-job .sh23-head{display:flex;align-items:center;gap:12px;margin-bottom:17px;min-width:0}
+#directory .sh23-avatar{height:54px;width:54px;flex:0 0 54px;object-fit:cover;border-radius:50%;background:#dbdacd;border:2px solid #d5b184}
+#directory .sh23-identity{min-width:0;flex:1}
+#directory .sh23-identity strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#153345;font-size:16px}
+#directory .sh23-identity small{display:block;color:#60747c;font-size:12px;margin-top:2px}
+#directory .sh23-job .sh23-namebadge{color:#8c6742;background:#f2e7d6;border-radius:16px;padding:5px 9px;font-size:11px;font-weight:700;white-space:nowrap}
+#directory .sh23-job .sh23-title{font:500 clamp(25px,5vw,34px)/1.1 Georgia,serif;color:#102f3e;margin:4px 0 14px}
+#directory .sh23-job .sh23-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+#directory .sh23-job .sh23-fact{background:#ebeae3;border-radius:12px;padding:10px 11px;min-width:0}
+#directory .sh23-job .sh23-fact small{display:block;color:#576e75;font-size:11px;margin-bottom:4px}
+#directory .sh23-job .sh23-fact strong{font-size:13px;color:#14384c;overflow-wrap:anywhere}
+#directory .sh23-job .sh23-desc{font:14px/1.6 system-ui,sans-serif;color:#40585e;margin:10px 0 16px;overflow-wrap:anywhere}
+#directory .sh23-job .sh23-actions{display:grid;grid-template-columns:1fr auto;gap:9px;align-items:center}
+#directory .sh23-job .sh23-apply{border:0;border-radius:11px;background:#c99f6d;color:#0e2736;font:750 14px system-ui;padding:14px 12px;min-height:48px;cursor:pointer}
+#directory .sh23-job .sh23-save{border:1px solid #a4b4b1;border-radius:11px;color:#173647;background:transparent;font:600 13px system-ui;padding:12px;min-height:48px;cursor:pointer}
+#directory .sh23-job .sh23-state{color:#4b646c;font-size:12px;margin:8px 0 0}
+#directory .sh23-job.sh23-enhanced > :not(.sh23-shell):not(.sh-proposal-box){display:none!important}
+#directory .sh23-job.sh23-enhanced .sh-proposal-box{display:block!important;margin:14px 0 0;max-width:100%}
+#directory .sh23-job.sh23-enhanced .sh23-shell{display:block!important}
+#directory .sh23-job .sh23-manage{margin-top:12px;border:1px solid #d7c9b5;border-radius:12px;padding:12px}
+#directory .sh23-job .sh23-manage summary{font-size:13px;font-weight:700;cursor:pointer;color:#183d49}
+#directory .sh23-job .sh23-manage .sh-job-controls{display:flex!important;flex-wrap:wrap!important;gap:6px;margin-top:10px}
+#directory .sh23-job .sh23-manage button{font-size:12px!important;padding:10px!important;min-height:38px!important}
+#discover .sh23-discovery-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:32px auto 50px;max-width:1080px;width:calc(100% - 42px);position:relative;z-index:1}
+#discover .sh23-discovery-step{padding:19px;background:linear-gradient(135deg,#142b31b8,#071c23cf);border:1px solid #e4c09255;border-radius:16px;color:#edf2ee;backdrop-filter:blur(8px)}
+#discover .sh23-discovery-step small{font:700 11px system-ui;letter-spacing:.16em;color:#e1b781}
+#discover .sh23-discovery-step strong{display:block;margin:8px 0;font:normal 23px Georgia,serif}
+#discover .sh23-discovery-step p{color:#c6d7d4;font:13px/1.5 system-ui;margin:0}
+@media(max-width:640px){#directory .sh22-inline-jobs .job.sh23-job{padding:15px!important}#directory .sh23-job .sh23-meta{gap:7px}#directory .sh23-job .sh23-actions{grid-template-columns:1fr auto}#discover .sh23-discovery-strip{grid-template-columns:1fr;gap:9px;margin:16px auto 36px}#discover .sh23-discovery-step{padding:14px 17px}#discover .sh23-discovery-step strong{font-size:20px}}
+`;
+const $=s=>document.querySelector(s);
+function d(tag,cls,value){const e=document.createElement(tag);if(cls)e.className=cls;if(value!==undefined)e.textContent=value;return e}
+function config(){const c=window.SHUTTERHUNTERS_CONFIG||{};return c}
+let db=null;
+function api(){if(db)return db;const c=config();if(c.supabaseUrl&&c.supabaseAnonKey&&window.supabase?.createClient)db=window.supabase.createClient(c.supabaseUrl,c.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true}});return db}
+let jobs=[];let people=new Map();let me=null;let loading=false;
+async function loadExtra(){if(loading)return;loading=true;try{const client=api();if(!client)return;const auth=await client.auth.getUser();me=auth.data?.user?.id||null;const res=await client.from('sh_job_posts').select('id,client_id,title,location,budget,event_date,specialty,details,status').eq('status','open').order('created_at',{ascending:false}).limit(100);if(res.error)return;jobs=res.data||[];const ids=[...new Set(jobs.map(j=>j.client_id).filter(Boolean))];if(!ids.length)return;const q=await client.from('profiles').select('id,display_name,avatar_url,city,state,is_public').in('id',ids);if(!q.error)people=new Map((q.data||[]).map(p=>[p.id,p]));}catch(err){console.warn('Job card profiles:',err)}finally{loading=false;draw()}}
+function findJob(card){const title=card.querySelector('.sh-job-top h3, h3')?.textContent?.trim()||'';const loc=card.querySelector('.sh-job-meta')?.textContent?.split(' · ')[0]?.trim()||'';return jobs.find(j=>j.title===title&&(!loc||String(j.location||'').trim()===loc))||null}
+function val(v){return v==null||v===''?'Not specified':String(v)}
+function fact(label,value){const el=d('div','sh23-fact');el.append(d('small','',label),d('strong','',value));return el}
+function cleanCards(){document.querySelectorAll('#shLiveJobsList .sh23-enhanced').forEach(card=>{const shell=card.querySelector(':scope > .sh23-shell');const controls=shell?.querySelector('.sh23-manage .sh-job-controls');if(controls)card.append(controls);shell?.remove();card.classList.remove('sh23-job','sh23-enhanced');});}
+function draw(){const parent=$('#sh22-inline-jobs #shLiveJobsList');if(!parent)return;for(const card of parent.querySelectorAll('.sh-job-live')){
+ if(card.classList.contains('sh23-enhanced'))continue;
+ const job=findJob(card);if(!job && !jobs.length)continue;
+ const original=card.querySelector('.sh-job-controls');const isMine=!!(job&&me&&me===job.client_id);const profile=job?people.get(job.client_id):null;
+ const shell=d('div','sh23-shell'),head=d('div','sh23-head');const avatar=d('img','sh23-avatar');avatar.alt='Client portrait';avatar.loading='lazy';avatar.src=profile?.avatar_url&&/^https:\/\//.test(profile.avatar_url)?profile.avatar_url:'creator1.webp';avatar.onerror=()=>{avatar.onerror=null;avatar.src='creator1.webp'};
+ const identity=d('div','sh23-identity');identity.append(d('strong','',profile?.display_name||'ShutterHunters client'),d('small','',isMine?'Your listing':profile?'Client profile':'Client details unavailable'));
+ head.append(avatar,identity,d('span','sh23-namebadge',isMine?'Your project':'Open project'));
+ shell.append(head,d('h3','sh23-title',job?.title||card.querySelector('h3')?.textContent||'Creative opportunity'));
+ const meta=d('div','sh23-meta');meta.append(fact('LOCATION',val(job?.location||card.querySelector('.sh-job-meta')?.textContent?.split(' · ')[0])),fact('PROJECT PAY',job?.budget!=null?'$'+Number(job.budget).toLocaleString():'Not listed'),fact('SHOOT DATE',job?.event_date?new Date(job.event_date+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'Flexible'),fact('TYPE OF SHOOT',val(job?.specialty||card.querySelector('.sh-job-meta')?.textContent?.split(' · ')[1])));shell.append(meta);
+ shell.append(d('p','sh23-desc',String(job?.details||card.querySelector('p')?.textContent||'').slice(0,200)));
+ const actions=d('div','sh23-actions'),main=d('button','sh23-apply',isMine?'View your listing':'Express Interest'),save=d('button','sh23-save','Save Job');main.type=save.type='button';
+ main.addEventListener('click',()=>{if(isMine){const details=card.querySelector('.sh81-view-job');details?.click();return}const apply=[...(original?.querySelectorAll('button')||[])].find(b=>/Send proposal|Unlock Pro/i.test(b.textContent));if(!apply){alert('This project is not available for applications.');return}if(/Unlock Pro/.test(apply.textContent)){apply.click();return}apply.click();const form=card.querySelector('.sh-proposal-box');const ta=form?.querySelector('textarea');if(ta&&!ta.value.trim()){ta.value=`Hello! I’m interested in your ${job?.title||'creative'} project${job?.event_date?' on '+job.event_date:''}. I’m a ShutterHunters creator, and I’d love to discuss how I can help. Please review my creator profile on ShutterHunters to see my portfolio and experience. Thank you!`;}form?.scrollIntoView({behavior:'smooth',block:'nearest'});main.textContent='Complete Inquiry Below';});
+ const nativeSave=[...(original?.querySelectorAll('button')||[])].find(b=>/Save Job/i.test(b.textContent));save.addEventListener('click',()=>{const alternate=card.querySelector('.sh20-job-save');(nativeSave||alternate)?.click();save.textContent='Saved ✓'});
+ actions.append(main,save);shell.append(actions);
+ const note=d('p','sh23-state',isMine?'This is your listing. Applicants will contact you through your Inbox.':'Your message can be edited before submission. Sending it creates an inquiry through the existing ShutterHunters system.');shell.append(note);
+ if(isMine&&original){const manage=d('details','sh23-manage'),summary=d('summary','','Manage this listing');manage.append(summary,original);shell.append(manage)}
+ card.prepend(shell);card.classList.add('sh23-job','sh23-enhanced');
+ }}
+function addDiscovery(){const section=$('#discover');if(!section||$('#sh23-discovery-strip'))return;const strip=d('div','sh23-discovery-strip');strip.id='sh23-discovery-strip';for(const [n,t,s] of [['01 / DISCOVER','Find your next project','Explore real opportunities from creative clients.'],['02 / CONNECT','Meet your people','Discover the right creator for your vision.'],['03 / CREATE','Make something remarkable','Turn a good idea into your next great project.']]){const item=d('div','sh23-discovery-step');item.append(d('small','',n),d('strong','',t),d('p','',s));strip.append(item)}const hero=section.querySelector('.hero,.sh79-hero')||section.firstElementChild;if(hero?.parentNode===section)hero.after(strip);else section.append(strip)}
+function init(){if($('#sh23-style'))return;const s=d('style');s.id='sh23-style';s.textContent=CSS23;document.head.append(s);addDiscovery();const list=$('#shLiveJobsList');if(list){let frame=false;const observer=new MutationObserver(()=>{if(frame)return;frame=true;requestAnimationFrame(()=>{frame=false;draw()})});observer.observe(list,{childList:true});draw()};document.addEventListener('click',e=>{if(e.target.closest('#sh21-jobs,.sh22-refresh')){loadExtra();setTimeout(draw,180)}if(e.target.closest('#sh21-creators,#discover button,#jobs .sh79-choice,#shFindV14'))cleanCards();},true);loadExtra();}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+})();
