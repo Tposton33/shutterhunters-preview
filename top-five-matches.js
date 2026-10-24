@@ -270,6 +270,16 @@ const css=`
 `;
 const style=document.createElement('style');style.id='shFindV14Styles';style.textContent=css;document.head.append(style);
 let overlay=null,search=null,list=null,status=null,anchors=[],lastFocus=null,checking=false;
+// Find Jobs lives in its own IIFE, so it needs its own scoped database accessor.
+let findJobsDb=null;
+function getBridge(){
+ if(findJobsDb)return findJobsDb;
+ const cfg=window.SHUTTERHUNTERS_CONFIG||{};
+ if(!cfg.supabaseUrl||!cfg.supabaseAnonKey||!window.supabase?.createClient)return null;
+ findJobsDb=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+ return findJobsDb;
+}
+
 function lockScreen(message){let el=document.getElementById('shFindV15Lock');if(!el){el=document.createElement('div');el.id='shFindV15Lock';el.hidden=true;el.innerHTML='<div class="sh15-lock-inner" role="dialog" aria-modal="true" aria-labelledby="sh15-title"><span style="letter-spacing:.19em;color:#dfb886;font-size:12px">SHUTTERHUNTERS / MEMBER ACCESS</span><h2 id="sh15-title">Find Jobs is for members.</h2><p id="sh15-lock-msg"></p><div><button type="button" data-sh15="upgrade">Explore memberships ↗</button><button type="button" data-sh15="close" class="sh15-secondary">Close</button></div></div>';document.body.appendChild(el);el.addEventListener('click',e=>{const a=e.target.closest('[data-sh15]')?.dataset.sh15;if(!a)return;el.hidden=true;if(a==='upgrade'&&typeof window.go==='function')window.go('membership')});}el.querySelector('#sh15-lock-msg').textContent=message;el.hidden=false;}
 async function hasFindJobsAccess(){
  const db=getBridge();
