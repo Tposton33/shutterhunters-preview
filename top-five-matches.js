@@ -386,3 +386,59 @@ function init(){window.sh79FindJobs=()=>{open()};const demo=document.getElementB
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 window.ShutterHuntersFindJobs={open,close};
 })();
+
+
+/* V19: UI-only enhancement. Keep all V18 flows and access checks. */
+(()=>{'use strict';
+const styles=`
+/* Replace platform emoji arrow glyphs with predictable icons */
+.sh79-choice>span:last-child{font-size:0!important;display:grid!important;place-items:center;min-width:44px;height:44px;border:1px solid rgba(232,196,149,.55);border-radius:50%;background:rgba(255,255,255,.055);transition:transform .3s ease,background .3s ease}
+.sh79-choice>span:last-child::after{content:'↗';font:400 25px/1 system-ui,sans-serif;color:#f1c68d}
+.sh79-choice:hover>span:last-child,.sh79-choice:focus-visible>span:last-child{transform:translate(3px,-3px);background:rgba(255,255,255,.15)}
+/* Discovery action arrows are plain typographic glyphs, never emoji */
+#discover button, #discover .sh-cinema-cta{font-variant-emoji:text}
+#discover button[onclick*="go('post')"],#discover button[onclick*="sh79FindJobs"]{transition:transform .45s ease,box-shadow .45s ease,filter .45s ease}
+#discover button[onclick*="go('post')"]:hover,#discover button[onclick*="sh79FindJobs"]:hover{transform:translateY(-4px);filter:brightness(1.07)}
+@keyframes sh19Reveal{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+#discover .sh19-reveal{animation:sh19Reveal .85s cubic-bezier(.2,.7,.2,1) both}
+#discover .sh19-reveal:nth-of-type(2){animation-delay:.16s}
+@media(prefers-reduced-motion:reduce){#discover .sh19-reveal{animation:none!important}#discover button{transition:none!important}}
+/* Creator directory switch - stays inside the original native directory page */
+#directory .sh19-tabs{display:flex;gap:10px;margin:22px 0 26px;background:#e1dbcd;border:1px solid #c6bdac;padding:7px;border-radius:17px;max-width:530px}
+#directory .sh19-tabs button{border:0;border-radius:12px;background:transparent;color:#213332;font:700 14px/1.3 system-ui,sans-serif;padding:15px 14px;flex:1;min-height:49px;cursor:pointer}
+#directory .sh19-tabs button[aria-selected="true"]{background:#123531;color:#fff;box-shadow:0 5px 18px #0002}
+#directory .sh19-job-pane[hidden],#directory #sh19-creators-content[hidden]{display:none!important}
+#directory .sh19-job-pane{padding:clamp(20px,5vw,38px);background:linear-gradient(140deg,#102e46,#071827);color:#eff6fb;border-radius:22px;margin:0 0 28px}
+#directory .sh19-job-pane h2{font:400 clamp(30px,6vw,48px)/1.1 Georgia,serif;color:#fff;margin:9px 0}
+#directory .sh19-job-pane p{color:#baccda;line-height:1.65}
+#directory .sh19-job-pane button{width:100%;max-width:360px;background:#e0b77f;color:#102333;border:0;border-radius:13px;font:750 15px system-ui,sans-serif;padding:17px;min-height:50px;cursor:pointer}
+#directory .sh19-job-pane .sh19-sub{display:block;color:#dab887;letter-spacing:.16em;font:700 11px system-ui,sans-serif}
+@media(max-width:600px){#directory .sh19-tabs{margin:18px 0}#directory .sh19-tabs button{font-size:13px;padding:12px 8px}}
+`;
+function init(){
+ if(document.getElementById('sh19-style'))return;
+ const st=document.createElement('style');st.id='sh19-style';st.textContent=styles;document.head.appendChild(st);
+ const directory=document.getElementById('directory');
+ if(directory&&!document.getElementById('sh19-tabs')){
+  const tabs=document.createElement('div');tabs.className='sh19-tabs';tabs.id='sh19-tabs';tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','Browse creators or jobs');
+  tabs.innerHTML='<button role="tab" id="sh19-creators-tab" aria-selected="true" aria-controls="sh19-creators-content">Find Creators</button><button role="tab" id="sh19-jobs-tab" aria-selected="false" aria-controls="sh19-jobs-content">Available Jobs</button>';
+  const pane=document.createElement('div');pane.className='sh19-job-pane';pane.id='sh19-jobs-content';pane.setAttribute('role','tabpanel');pane.setAttribute('aria-labelledby','sh19-jobs-tab');pane.hidden=true;
+  pane.innerHTML='<span class="sh19-sub">SHUTTERHUNTERS / CREATIVE OPPORTUNITIES</span><h2>Discover your next project.</h2><p>Explore real posted jobs, filter by pay and travel, and use your existing account to manage opportunities. Your membership access applies here too.</p><button type="button" id="sh19-open-jobs">Explore Available Jobs →</button>';
+  const wrap=document.createElement('div');wrap.id='sh19-creators-content';wrap.setAttribute('role','tabpanel');wrap.setAttribute('aria-labelledby','sh19-creators-tab');
+  const intro=directory.querySelector('.sh-dir-intro');
+  if(intro)intro.after(tabs);else directory.prepend(tabs);
+  tabs.after(pane);pane.after(wrap);
+  const moving=[];let next=pane.nextSibling;
+  while(next){const n=next.nextSibling;moving.push(next);next=n}
+  moving.forEach(el=>wrap.appendChild(el));
+  function switchTo(mode){const jobs=mode==='jobs';pane.hidden=!jobs;wrap.hidden=jobs;tabs.querySelector('#sh19-jobs-tab').setAttribute('aria-selected',String(jobs));tabs.querySelector('#sh19-creators-tab').setAttribute('aria-selected',String(!jobs));}
+  tabs.querySelector('#sh19-creators-tab').addEventListener('click',()=>switchTo('creators'));
+  tabs.querySelector('#sh19-jobs-tab').addEventListener('click',()=>switchTo('jobs'));
+  pane.querySelector('#sh19-open-jobs').addEventListener('click',()=>{if(typeof window.sh79FindJobs==='function')window.sh79FindJobs();else if(typeof window.go==='function')window.go('jobs')});
+ }
+ // Make the discovery CTA draw attention without touching original click handlers.
+ const hero=document.querySelector('#discover .sh-cinema-actions');
+ if(hero)Array.from(hero.querySelectorAll('button')).forEach((b,i)=>{b.classList.add('sh19-reveal');b.style.animationDelay=`${i*120}ms`});
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+})();
