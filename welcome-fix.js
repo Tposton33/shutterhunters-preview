@@ -1,8 +1,9 @@
-/* ShutterHunters V30 welcome screen fix — add to index.html immediately before </body>.
+/* ShutterHunters V31 welcome screen fix — add to index.html immediately before </body>.
    This is independent of top-five-matches.js and does not change membership status. */
 (function () {
   'use strict';
   function setup() {
+    document.documentElement.dataset.shWelcomeFixVersion = '31';
     const modal = document.getElementById('sh72Welcome');
     if (!modal || modal.dataset.sh30Bound === 'true') return;
     modal.dataset.sh30Bound = 'true';
@@ -50,6 +51,7 @@
       }
     }
     window.addEventListener('click', handle, true);
+    window.addEventListener('touchend', handle, true);
     // The original intro may have marked this browser complete already.
     try { if (localStorage.getItem('sh72_welcome_seen') === '1') dismiss(); } catch (_) {}
   }
