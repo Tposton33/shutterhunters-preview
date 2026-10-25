@@ -707,7 +707,8 @@ async function loadV5Comments(m,area){area.replaceChildren();const {data,error}=
 
 function startInquiry(p){if(!user){go('account');say('Sign in or create a free account to send a project inquiry.');return}if(!p||p.id===user.id)return;viewed=p;$('inquiryTo').textContent='To '+p.display_name;$('inquiryFormStatus').textContent='';$('inquiryModal').classList.remove('hidden')}
 $('closeInquiry').onclick=()=>$('inquiryModal').classList.add('hidden');$('inquiryModal').addEventListener('click',e=>{if(e.target===$('inquiryModal'))$('inquiryModal').classList.add('hidden')});
-$('inquiryForm').addEventListener('submit',async e=>{e.preventDefault();if(!user||!viewed||viewed.id===user.id)return;const f=new FormData(e.target);const row={sender_id:user.id,recipient_id:viewed.id,subject:String(f.get('subject')).trim(),message:(String(f.get('location')||'').trim()?'Location: '+String(f.get('location')).trim()+'\n':'')+String(f.get('message')).trim(),event_date:f.get('event_date')||null,budget:f.get('budget')?Number(f.get('budget')):null};$('inquiryFormStatus').textContent='Sending…';const {data:created,error}=await client.from('inquiries').insert(row).select('id').single();if(error){$('inquiryFormStatus').textContent='Could not send: '+error.message;return}if(created?.id){const provision=await client.rpc('sh19_open_inquiry',{p_inquiry:created.id});if(provision.error)console.warn('V19 workflow not yet enabled:',provision.error.message)}$('inquiryForm').reset();$('inquiryModal').classList.add('hidden');alert('Your project inquiry was sent! View it in Sent Inquiries.');go('inquiries');mode='sent';await loadInquiries()});
+$('inquiryForm').addEventListener('submit',async e=>{e.preventDefault();if(!user||!viewed||viewed.id===user.id)return;const f=new FormData(e.target);const row={sender_id:user.id,recipient_id:viewed.id,subject:String(f.get('subject')).trim(),message:(String(f.get('location')||'').trim()?'Location: '+String(f.get('location')).trim()+'\n':'')+String(f.get('message')).trim(),event_date:f.get('event_date')||null,budget:f.get('budget')?Number(f.get('budget')):null};$('inquiryFormStatus').textContent='Sending…';const {data:created,error}=await client.from('inquiries').insert(row).select('id').single();if(error){$('inquiryFormStatus').textContent='Could not send: '+error.message;return}// The invitation starts a conversation immediately; no approval step is required.
+$('inquiryForm').reset();$('inquiryModal').classList.add('hidden');alert('Your project inquiry was sent! View it in Sent Inquiries.');go('inquiries');mode='sent';await loadInquiries()});
 $('receivedTab').onclick=()=>{mode='received';loadInquiries()};$('sentTab').onclick=()=>{mode='sent';loadInquiries()};
 let shActiveInquiry=null;let shThreadLoadToken=0;
 async function shOpenThread(inquiry){
@@ -753,25 +754,13 @@ async function loadInquiries(){
  $('inquiryStatus').textContent=error?'Inbox unavailable: '+error.message:!(data||[]).length?'No '+mode+' inquiries yet.':`${data.length} ${mode} inquiries`;
  if(error)return;await updateInquiryBadge();
  for(const i of data||[]){
-  const d=document.createElement('article');d.className='inquiry-card';const top=document.createElement('header');top.append(text('h3',i.subject),text('span',i.status||'new','tag'));
+  const d=document.createElement('article');d.className='inquiry-card';const top=document.createElement('header');top.append(text('h3',i.subject),text('span','Conversation','tag'));
   const when=i.event_date?' · Project date '+i.event_date:'';
   d.append(top,text('small',new Date(i.created_at).toLocaleString()+when),text('p',i.message));
   if(i.budget!==null)d.append(text('p','Budget: $'+i.budget));
   const open=text('button','✉ Open conversation →','sh-open-thread');open.type='button';open.onclick=()=>shOpenThread(i);d.append(open);
-  let wf=await client.from('sh19_inquiry_workflows').select('phase,creator_approved,client_approved').eq('inquiry_id',i.id).maybeSingle();
-  if(!wf.error&&!wf.data){await client.rpc('sh19_open_inquiry',{p_inquiry:i.id});wf=await client.from('sh19_inquiry_workflows').select('phase,creator_approved,client_approved').eq('inquiry_id',i.id).maybeSingle()}
-  if(!wf.error&&wf.data){
-   const stage=wf.data;d.append(text('p','Project status: '+String(stage.phase).replaceAll('_',' '),'sh19-stage'));
-   if(stage.phase!=='declined'&&stage.phase!=='confirmed'){
-    const controls=document.createElement('div');controls.className='sh19-actions';
-    function action(title,code){const b=text('button',title,'filter');b.type='button';b.onclick=async()=>{b.disabled=true;const {error}=await client.rpc('sh19_change_inquiry',{p_inquiry:i.id,p_action:code});if(error){alert('Action unavailable: '+error.message);b.disabled=false;return}await loadInquiries();if(typeof shLoadSchedule==='function')shLoadSchedule()};controls.append(b)}
-    if(mode==='received'&&stage.phase==='pending') {action('Interested — discuss project','interested');action('Decline inquiry','decline')}
-    if(stage.phase==='discussion'||stage.phase==='ready'){action(mode==='received'?'Approve as creator':'Approve as client','approve')}
-    if(stage.phase==='discussion'&&mode==='received'&&!stage.creator_approved)controls.append(text('small','Discuss the final details before approving.'));
-    d.append(controls)
-   }
-  }
-  if(mode==='received'&&i.status==='new'){const btn=text('button','Mark reviewed','filter');btn.onclick=async()=>{const {error}=await client.from('inquiries').update({status:'reviewed'}).eq('id',i.id).eq('recipient_id',user.id);if(error)alert(error.message);else loadInquiries()};d.append(btn)}
+  // V37: Project invitations are conversations, not approval workflows.
+  // Booking/contract approval remains a separate future process.
   out.append(d)
  }
  if(shActiveInquiry){const updated=(data||[]).find(x=>x.id===shActiveInquiry.id);if(updated)shActiveInquiry=updated;else{$('shThread').hidden=true;shActiveInquiry=null}}
