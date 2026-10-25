@@ -144,14 +144,33 @@ let stage='brief',brief={},list=[],active=0,selected=null,jobId=null,currentUser
 const root=document.createElement('div');root.id='sh5-demo';root.hidden=true;root.setAttribute('role','region');root.setAttribute('aria-label','ShutterHunters post a job and creator matching');document.body.appendChild(root);
 
 function rank(c){
+  // Match real subscriber accounts to the *requested service* first.
+  // Do not invent availability, travel distances, rates or subscriber status.
   let score=0;
-  const cat=String(brief.category||'').toLowerCase(), city=String(brief.location||'').toLowerCase(),desc=(String(brief.details||'')+' '+String(brief.service||'')).toLowerCase();
-  const types=(c.types||[]).join(' ').toLowerCase(), text=[c.style,c.specialty,c.bio,(c.skills||[]).join(' ')].join(' ').toLowerCase();
-  if(cat&&(types.includes(cat)||text.includes(cat)))score+=55;
-  const town=city.split(',')[0].trim();if(town&&c.region.toLowerCase().includes(town))score+=40;
-  else if(city.includes('ca')&&/\bca\b|california/i.test(c.region))score+=8;
-  for(const word of ['cinematic','vintage','documentary','editorial','film','photo','video','brand','wedding','event','portrait'])if(desc.includes(word)&&text.includes(word))score+=6;
-  const budget=Number(String(brief.budget||'').replace(/[$,]/g,''));if(Number.isFinite(budget)&&budget>0&&Number(c.rate)>0){if(Number(c.rate)<=budget)score+=10;}
+  const category=String(brief.category||'').toLowerCase();
+  const service=String(brief.service||'').toLowerCase();
+  const location=String(brief.location||'').toLowerCase().trim();
+  const city=location.split(',')[0].trim();
+  const keywords=[c.specialty,c.style,c.bio,...(c.skills||[]),...(c.types||[])].join(' ').toLowerCase();
+  const isVideo=/video|film|cinema|filmmak|motion/.test(keywords);
+  const isPhoto=/photo|portrait|still|image/.test(keywords);
+  if(category && keywords.includes(category))score+=45;
+  if(service==='videographer')score+=isVideo?90:-45;
+  else if(service==='photographer')score+=isPhoto?90:-45;
+  else if(service==='both')score+=(isVideo?40:0)+(isPhoto?40:0)-(isVideo||isPhoto?0:30);
+  const creatorLocation=String(c.region||'').toLowerCase();
+  if(city && creatorLocation.includes(city))score+=50;
+  else if(location.includes('ca') && /\bca\b|california/.test(creatorLocation))score+=12; // same state, not a mileage claim
+  const description=String(brief.details||'').toLowerCase();
+  for(const word of ['cinematic','vintage','documentary','editorial','film','photo','video','brand','wedding','event','portrait']){
+    if(description.includes(word)&&keywords.includes(word))score+=4;
+  }
+  const budget=Number(String(brief.budget||'').replace(/[$,]/g,''));
+  const rate=Number(c.rate);
+  if(Number.isFinite(budget)&&budget>0 && Number.isFinite(rate)&&rate>0){
+    // An hourly rate isn't the same as a whole project quote: use only a modest signal.
+    if(rate<=budget)score+=5;
+  }
   return score;
 }
 async function publishAndMatch(form){
@@ -171,7 +190,7 @@ async function publishAndMatch(form){
 function open(stageName='brief'){stage=stageName;root.hidden=false;document.body.style.overflow='hidden';draw();}function exit(){root.hidden=true;document.body.style.overflow='';}
 function shell(body){root.innerHTML=`<div class="wrap"><div class="nav"><div class="logo">Shutter<em>Hunters.</em> <span class="quiet">/ Hire Creators</span></div><div><button class="textbtn" data-action="native-inbox">Inbox ↗</button><button class="textbtn" data-action="exit">✕ Close</button></div></div><div class="shell">${body}</div><div class="footer">Only active Pro and Studio creators with public profiles qualify for Top 5. Invitations are delivered only after the database confirms success.</div></div>`;root.scrollTop=0;if(stage==='profile')requestAnimationFrame(()=>{root.querySelectorAll('video[autoplay]').forEach(v=>v.play().catch(()=>{}))})}
 function draw(){if(stage==='brief')return shell(`<div class="brief"><div class="step">01 / Tell us what you're creating</div><h1>Every great project starts with a vision.</h1><p class="quiet">Publish your project and discover up to five matching subscribed creators. Matches depend on real active membership and public profile details.</p><form id="sh5-form"><div class="fields"><label>Project title<input name="title" required maxlength="110" value="${esc(brief.title||'')}" placeholder="e.g. Vintage wedding film"></label><label>Type of creative<select name="category"><option>Wedding</option><option>Event</option><option>Commercial</option><option>Portrait</option><option>Real Estate</option><option>Engagement</option><option>Family</option><option>Graduation</option><option>Sports</option><option>Music Video</option><option>Product</option><option>Corporate</option><option>Other</option></select></label><label>Location<input name="location" required value="${esc(brief.location||'')}" placeholder="e.g. Sacramento, CA"></label><label>Project date<input type="date" name="date" value="${esc(brief.date||'')}"></label><label>Budget<input name="budget" placeholder="e.g. $1,500–$3,000" value="${esc(brief.budget||'')}"></label><label>What do you need?<select name="service"><option value="photographer" ${brief.service==='photographer'?'selected':''}>Photographer</option><option value="videographer" ${brief.service==='videographer'?'selected':''}>Videographer</option><option value="both" ${brief.service==='both'?'selected':''}>Photographer &amp; Videographer</option><option value="other" ${brief.service==='other'?'selected':''}>Other</option></select></label><label class="wide">Your creative brief<textarea name="details" required placeholder="What do you need? Describe your vision, deliverables and style.">${esc(brief.details||'')}</textarea></label></div><div class="actions"><button class="primary" type="submit">Publish Job & Find Matches →</button><button class="secondary" type="button" data-action="exit">Close</button></div></form></div>`);
-if(stage==='matches'&&!list.length)return shell(`<div class="match-head"><h1>Meet Your Top 5 Matches</h1></div><div class="brief"><h2>No eligible creators yet</h2><p>There are currently no active Pro or Studio members with public profiles available to show. Your job has been published. As eligible creators join, matching will be available.</p><div class="actions"><button class="primary" data-action="all">Explore All Creators ↗</button><button class="secondary" data-action="exit">Back to ShutterHunters</button></div></div>`);
+if(stage==='matches'&&!list.length)return shell(`<div class="match-head"><h1>Meet Your Top 5 Matches</h1></div><div class="brief"><h2>No eligible creators yet</h2><p>No eligible Pro or Studio creator profiles were returned for this search. Check that their memberships are active, their profiles are public, and the creator directory can read them. Availability and exact travel radius are not yet verified by this matching preview. Your job has been published.</p><div class="actions"><button class="primary" data-action="all">Explore All Creators ↗</button><button class="secondary" data-action="exit">Back to ShutterHunters</button></div></div>`);
 if(stage==='matches'){return shell(`<div class="match-head"><h1>Meet Your Top 5 Matches</h1></div><div class="match-stage" id="sh5-stack" aria-label="Swipe left to explore creator matches">${[...list].reverse().map(p=>{let index=list.indexOf(p),depth=(index-active+list.length)%list.length;let off=Math.min(depth,4),scale=1-off*.047,y=off*18;return `<article class="match-card" data-card="${index}" style="z-index:${20-depth};transform:translate3d(0,${y}px,0) scale(${scale});opacity:${depth===4?.82:1};pointer-events:${depth===0?'auto':'none'}"><div class="photo"><img draggable="false" src="${esc(p.photo)}" alt="Profile photo of ${esc(p.name)}"><span class="rank">${index===0?'✦ BEST MATCH · #1':'MATCH #'+(index+1)}</span></div><div class="info"><div class="step">${'Premium creator'} · ${esc(p.region)}</div><h2>${esc(p.name)}</h2><div class="detail">${esc(p.specialty)} · ${esc(p.style)}</div><div class="rate">${p.rate==null?"Rate upon request":"From $"+esc(p.rate)+"/"+esc(p.rateUnit)}</div><p>${esc(p.bio)}</p><div class="chips">${p.skills.map(s=>`<span>${esc(s)}</span>`).join('')}</div><div class="actions"><button class="primary" data-action="profile" data-index="${index}">View Profile</button><button class="secondary" data-action="invite" data-index="${index}">Invite to Project</button></div></div></article>`}).join('')}</div><div class="match-footer"><button class="circle" data-action="prev" aria-label="Previous match">‹</button><span class="quiet">${active+1} / ${list.length}</span><button class="circle" data-action="next" aria-label="Next match">›</button></div><p class="swipe-hint">← Swipe the entire card to reveal the next creator</p><div class="alllink"><button class="secondary" data-action="all">View All Candidates ↗</button><button class="secondary" data-action="native-inbox">Open Inbox ↗</button></div>`) }
 if(stage==='profile'){const p=list[selected];let saved;try{saved=JSON.parse(localStorage.getItem('sh5_saved_creators')||'[]').includes(p.id)}catch{saved=false}return shell(`<button class="textbtn back" data-action="matches">← Back to your matches</button><div class="profile"><div class="profile-hero"><img src="${esc(p.photo)}" alt="Profile portrait of ${esc(p.name)}"><div class="profile-copy"><div class="step">Premium creator · Match #${selected+1}</div><h2>${esc(p.name)}</h2><div class="quiet">${esc(p.region)} · ${esc(p.specialty)}</div><div class="rate">${p.rate==null?"Rate upon request":"Starting at $"+esc(p.rate)+"/"+esc(p.rateUnit)}</div><p>${esc(p.bio)}</p><div class="chips">${p.skills.map(s=>`<span>${esc(s)}</span>`).join('')}</div><div class="actions"><button class="secondary" data-action="save">${saved?'✓ Saved Candidate':'☆ Save Candidate'}</button><button class="primary" data-action="invite" data-index="${selected}">Invite to Project</button></div></div></div><div class="portfolio">${portfolioMarkup(p)}<div class="profile-details"><h2>About ${esc(p.name)}</h2><p>${esc(p.bio)}</p><div class="actions"><button class="secondary" data-action="actual-profile">View Actual Profile ↗</button></div><div class="profile-panels"><div><h3>What I create</h3><p>${esc(p.specialty)} · ${esc(p.skills.join(', '))}</p></div><div><h3>Style & approach</h3><p>${esc(p.style)}. ${esc(p.bio)}</p></div></div><div class="actions"><button class="secondary" data-action="matches">← Back to Top 5</button><button class="primary" data-action="invite" data-index="${selected}">Invite to Project</button></div><div class="note">This is a match preview. Select View Actual Profile to explore the creator’s complete ShutterHunters page.</div></div></div></div>`)}
 if(stage==='invite'){let p=list[selected];return shell(`<button class="textbtn back" data-action="profile" data-index="${selected}">← Back to ${esc(p.name)}'s profile</button><div class="brief"><div class="step">03 / Project inquiry</div><h1>Invite ${esc(p.name)}.</h1><p class="quiet">The project inquiry will be sent to this creator’s actual ShutterHunters Inbox.</p><div class="inquiry"><strong>${esc(brief.title)}</strong><p>${esc(brief.details)}</p><small>${esc(brief.location)} · ${esc(brief.date||'Date flexible')} · ${esc(brief.budget||'Budget to discuss')}</small></div><form id="sh5-invite-form"><label>Personal note<textarea name="note" required placeholder="Tell this creator why you love their work and what you'd like to discuss.">Hi ${esc(p.name)}, I think your creative style could be a great fit for my project. I'd love to discuss it with you.</textarea></label><div class="actions"><button class="primary">Send Project Inquiry →</button></div></form><div class="note">You will see confirmed deliveries under Message Center → Sent. You cannot invite your own account.</div></div>`)}
@@ -644,4 +663,51 @@ function draw(){const parent=$('#sh22-inline-jobs #shLiveJobsList');if(!parent)r
 function addDiscovery(){const section=$('#discover');if(!section||$('#sh25-discovery-band'))return;const band=d('section','sh25-discovery-band');band.id='sh25-discovery-band';const lead=d('div','sh25-discovery-lead');lead.append(d('span','sh25-kicker','Why ShutterHunters'),d('strong','',"A smoother way to book talent or land your next project."),d('p','',"Browse opportunities, connect with creatives, and keep everything organized in one clean place."));const notes=d('div','sh25-discovery-notes');[['Post a Job','Tell creators exactly what you need and meet the best matches fast.'],['Find Jobs','Discover real projects from clients looking for creative professionals.'],['Built for creators','Save profiles, save jobs, and keep your inbox and bookings together.']].forEach(([t,s])=>{const item=d('div','sh25-note');item.append(d('strong','',t),d('p','',s));notes.append(item)});band.append(lead,notes);const hero=section.querySelector('.hero,.sh79-hero')||section.firstElementChild;if(hero?.parentNode===section)hero.after(band);else section.append(band)}
 function init(){if($('#sh23-style'))return;const s=d('style');s.id='sh23-style';s.textContent=CSS23;document.head.append(s);addDiscovery();const list=$('#shLiveJobsList');if(list){let frame=false;const observer=new MutationObserver(()=>{if(frame)return;frame=true;requestAnimationFrame(()=>{frame=false;draw()})});observer.observe(list,{childList:true});draw()};document.addEventListener('click',e=>{if(e.target.closest('#sh21-jobs,.sh22-refresh')){loadExtra();setTimeout(draw,180)}if(e.target.closest('#sh21-creators,#discover button,#jobs .sh79-choice,#shFindV14'))cleanCards();},true);loadExtra();}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+})();
+
+
+/* V26 — My Job Postings. Separate from Find Jobs and Top Five. */
+(()=>{
+'use strict';
+const style=document.createElement('style');style.id='sh26-myjobs-style';style.textContent=`
+#sh26-myjobs{max-width:960px;margin:25px 0 30px;color:#f5f5ef;font-family:system-ui,sans-serif}
+#sh26-myjobs button{cursor:pointer}
+#sh26-myjobs .sh26-toggle{width:100%;min-height:67px;text-align:left;padding:18px 21px;background:linear-gradient(120deg,#173c43,#102b36);color:#f5f5f1;border:1px solid #dbb47b72;border-radius:16px;display:flex;align-items:center;justify-content:space-between;gap:15px}
+#sh26-myjobs .sh26-toggle span{font:500 clamp(21px,3vw,29px) Georgia,serif}
+#sh26-myjobs .sh26-toggle small{font:600 12px system-ui;color:#e7c08a}
+#sh26-myjobs .sh26-panel{padding:18px 0}
+#sh26-myjobs .sh26-panel[hidden]{display:none!important}
+#sh26-myjobs .sh26-intro{font:14px/1.5 system-ui;color:#c6d8d5;margin:0 0 16px}
+#sh26-myjobs .sh26-card{padding:20px;margin:12px 0;background:#17383b;border:1px solid #6d918b77;border-radius:15px}
+#sh26-myjobs .sh26-card h3{font:500 25px/1.2 Georgia,serif;margin:0 0 8px;color:#fff}
+#sh26-myjobs .sh26-meta{font:13px/1.6 system-ui;color:#c7dbd8;overflow-wrap:anywhere}
+#sh26-myjobs .sh26-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:17px}
+#sh26-myjobs .sh26-actions button,#sh26-myjobs .sh26-refresh{min-height:43px;border-radius:10px;padding:10px 17px;border:1px solid #dfb983;color:#faefe1;background:#25464a;font:650 13px system-ui}
+#sh26-myjobs .sh26-actions .sh26-delete{border-color:#d59a91;color:#fff0ed;background:#643b39}
+#sh26-myjobs .sh26-message{color:#e6bc87;font:13px/1.5 system-ui;margin-top:10px}
+@media(max-width:650px){#sh26-myjobs{margin:18px 0}#sh26-myjobs .sh26-toggle{padding:16px}#sh26-myjobs .sh26-actions button{flex:1}}
+`;document.head.append(style);
+let db=null;function client(){if(db)return db;const c=window.SHUTTERHUNTERS_CONFIG||{};if(!window.supabase?.createClient||!c.supabaseUrl||!c.supabaseAnonKey)return null;db=window.supabase.createClient(c.supabaseUrl,c.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});return db;}
+const el=(tag,cl,txt)=>{const e=document.createElement(tag);if(cl)e.className=cl;if(txt!=null)e.textContent=txt;return e};
+function mount(){if(document.getElementById('sh26-myjobs'))return;const target=document.querySelector('#jobs .sh79-choices');if(!target)return;const root=el('section');root.id='sh26-myjobs';const toggle=el('button','sh26-toggle');toggle.type='button';toggle.setAttribute('aria-expanded','false');toggle.append(el('span','', 'My Job Postings'),el('small','', 'View my posts  ›'));const panel=el('div','sh26-panel');panel.hidden=true;root.append(toggle,panel);target.after(root);toggle.onclick=()=>{panel.hidden=!panel.hidden;toggle.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)load(panel)};}
+async function load(panel){panel.replaceChildren(el('p','sh26-intro','Your published jobs, their status, and a shortcut to applicant messages.'));const note=el('p','sh26-message','Loading your postings…');panel.append(note);const api=client();if(!api){note.textContent='Unable to connect to your account. Refresh and try again.';return}const {data:auth,error:ae}=await api.auth.getUser();if(ae||!auth?.user){note.textContent='Sign in to view your job postings.';return}const uid=auth.user.id;const {data:jobs,error}=await api.from('sh_job_posts').select('id,title,location,budget,event_date,status,created_at').eq('client_id',uid).order('created_at',{ascending:false}).limit(100);if(error){note.textContent='Unable to load your job postings: '+error.message;return}note.textContent=jobs?.length?`${jobs.length} posting${jobs.length===1?'':'s'}`:'You have not published any jobs yet.';for(const job of jobs||[]){const card=el('article','sh26-card');card.append(el('h3','',job.title||'Untitled job'));const meta=el('div','sh26-meta',[(job.location||'Location not listed'),job.event_date?`Shoot date: ${job.event_date}`:null,job.budget!=null?`Budget: $${Number(job.budget).toLocaleString()}`:null,`Status: ${job.status||'Unknown'}`].filter(Boolean).join(' · '));card.append(meta);card.append(el('p','sh26-meta','Likes / saves: Count unavailable until job engagement data is connected.'));const actions=el('div','sh26-actions');const inbox=el('button','','Messages · Inbox');inbox.type='button';inbox.onclick=()=>{if(typeof window.go==='function'){window.go('inbox');const nav=document.querySelector('[data-tab="inbox"]');nav?.click()}else{document.querySelector('#inbox')?.scrollIntoView({behavior:'smooth'})}};const del=el('button','sh26-delete','Delete Post');del.type='button';del.onclick=async()=>{if(!confirm(`Permanently delete “${job.title}”? This cannot be undone. Existing applicant conversations may be affected. Cancel to keep it.`))return;del.disabled=true;const {error:de}=await api.from('sh_job_posts').delete().eq('id',job.id).eq('client_id',uid);if(de){alert('Unable to delete this post: '+de.message);del.disabled=false;return}await load(panel);if(typeof window.shLoadRealJobs==='function')window.shLoadRealJobs().catch(()=>{})};actions.append(inbox,del);card.append(actions);panel.append(card)}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
+})();
+
+/* V27: clearer introduction CTA. Trial entitlements must come from the server, not this UI. */
+(()=>{
+ function setupIntro(){
+  const btn=document.getElementById('sh72Next');if(!btn||btn.dataset.sh27Intro)return;
+  btn.dataset.sh27Intro='1';
+  const observer=new MutationObserver(()=>{
+    const current=document.getElementById('sh72Step')?.textContent||'';
+    if(current.includes('03')){
+      btn.textContent='Create my creator profile →';
+      const body=document.getElementById('sh72WelcomeBody');
+      if(body)body.textContent='Build your creator profile now. A seven-day Pro trial will be offered once it is enabled for your account; no trial begins until the membership system confirms it.';
+    }
+  });
+  observer.observe(document.getElementById('sh72Welcome')||btn,{subtree:true,childList:true,characterData:true});
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setupIntro,{once:true});else setupIntro();
 })();
