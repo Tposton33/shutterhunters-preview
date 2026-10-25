@@ -1,60 +1,19 @@
-/* ShutterHunters V31 welcome screen fix — add to index.html immediately before </body>.
-   This is independent of top-five-matches.js and does not change membership status. */
-(function () {
-  'use strict';
-  function setup() {
-    document.documentElement.dataset.shWelcomeFixVersion = '31';
-    const modal = document.getElementById('sh72Welcome');
-    if (!modal || modal.dataset.sh30Bound === 'true') return;
-    modal.dataset.sh30Bound = 'true';
-    const next = document.getElementById('sh72Next');
-    const skip = document.getElementById('sh72Skip');
-    if (!next || !skip) return;
-    const pages = [
-      ['Great work starts<br><em>with great people.</em>', 'Show your photography and films. Find collaborators. Get discovered for your next project.'],
-      ['Your work deserves<br><em>to be seen.</em>', 'Build your creative portfolio and find real opportunities.'],
-      ['Create your free profile.<br><em>Start creating.</em>', 'Set up your profile to get discovered. The 7-day Pro trial is not active yet.']
-    ];
-    let current = 0;
-    function dismiss() {
-      modal.hidden = true;
-      modal.style.setProperty('display', 'none', 'important');
-      modal.setAttribute('aria-hidden', 'true');
-      document.documentElement.style.overflow = '';
-      document.body.style.overflow = '';
-      try {
-        localStorage.setItem('sh72_welcome_seen', '1');
-        sessionStorage.setItem('sh72_preview_seen', '1');
-      } catch (_) {}
-    }
-    function draw() {
-      const title = document.getElementById('sh72WelcomeTitle');
-      const body = document.getElementById('sh72WelcomeBody');
-      const step = document.getElementById('sh72Step');
-      if (title) title.innerHTML = pages[current][0];
-      if (body) body.textContent = pages[current][1];
-      if (step) step.textContent = '0' + (current + 1) + ' / 03';
-      next.textContent = current === 2 ? 'Create free profile →' : 'Continue →';
-    }
-    function handle(event) {
-      const button = event.target.closest && event.target.closest('#sh72Next, #sh72Skip');
-      if (!button || !modal.contains(button) || modal.hidden) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      if (button.id === 'sh72Skip') { dismiss(); return; }
-      if (current < 2) { current++; draw(); return; }
-      dismiss();
-      if (typeof window.go === 'function') window.go('account');
-      else {
-        const account = document.getElementById('account');
-        if (account) { document.querySelectorAll('main').forEach(m => m.classList.add('hidden')); account.classList.remove('hidden'); }
-      }
-    }
-    window.addEventListener('click', handle, true);
-    window.addEventListener('touchend', handle, true);
-    // The original intro may have marked this browser complete already.
-    try { if (localStorage.getItem('sh72_welcome_seen') === '1') dismiss(); } catch (_) {}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup, { once: true });
-  else setup();
+/* ShutterHunters V32 - fallback for BOTH existing onboarding overlays.
+   No account, data, or membership records are modified. */
+(()=>{'use strict';
+const slides=[
+ ['Great work starts<br><em>with great people.</em>','Show your photography and films. Find collaborators.'],
+ ['Your work deserves<br><em>to be seen.</em>','Build your portfolio and discover projects.'],
+ ['Create your profile.<br><em>Start creating.</em>','Set up your free creator profile.']];
+let introStep=0,tourStep=0;
+const $=id=>document.getElementById(id);
+function dismiss(id){const modal=$(id);if(!modal)return;modal.hidden=true;modal.setAttribute('aria-hidden','true');modal.style.setProperty('display','none','important');document.documentElement.style.overflow='';document.body.style.overflow='';try{if(id==='sh72Welcome')localStorage.setItem('sh72_welcome_seen','1');if(id==='v12Tour')sessionStorage.setItem('sh_v12_tour_seen','1')}catch(e){}}
+function openAccount(){try{if(typeof window.go==='function'){window.go('account');return}}catch(e){console.warn('Account route:',e)}const a=$('account');if(a){document.querySelectorAll('main').forEach(el=>el.classList.add('hidden'));a.classList.remove('hidden');a.hidden=false;try{a.scrollIntoView({block:'start'})}catch(e){}}}
+function introNext(){const modal=$('sh72Welcome');if(!modal||modal.hidden)return;if(introStep>=2){dismiss('sh72Welcome');openAccount();return}introStep++;if($('sh72WelcomeTitle'))$('sh72WelcomeTitle').innerHTML=slides[introStep][0];if($('sh72WelcomeBody'))$('sh72WelcomeBody').textContent=slides[introStep][1];if($('sh72Step'))$('sh72Step').textContent=`0${introStep+1} / 03`;if($('sh72Next'))$('sh72Next').textContent=introStep===2?'Create free profile →':'Continue →'}
+function tourNext(){const modal=$('v12Tour');if(!modal||modal.hidden)return;tourStep++;if(tourStep>=4){dismiss('v12Tour');return}const step=$('v12TourStep');if(step)step.textContent=`STEP 0${tourStep+1} / 04`;if($('v12TourNext'))$('v12TourNext').textContent=tourStep>=3?'Finish →':'Continue →'}
+function handle(e){const target=e.target?.closest?.('#sh72Next,#sh72Skip,#v12TourNext,#v12TourSkip');if(!target)return;const id=target.id;const modal=id.startsWith('sh72')?$('sh72Welcome'):$('v12Tour');if(!modal||modal.hidden)return;e.preventDefault();e.stopImmediatePropagation();if(id==='sh72Skip')dismiss('sh72Welcome');else if(id==='sh72Next')introNext();else if(id==='v12TourSkip')dismiss('v12Tour');else tourNext()}
+// Capture before legacy handlers, including when a tour is initialized later.
+document.addEventListener('click',handle,true);
+// Do not add a touchend handler: iOS synthesizes click, and processing both skips steps.
+document.documentElement.dataset.shWelcomeFixVersion='32';
 })();
