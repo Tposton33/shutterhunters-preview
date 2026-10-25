@@ -990,11 +990,13 @@ window.shTop5PublishJob=async function(values){
  return data;
 };
 window.shTop5EligibleCreators=async function(){
- const {data:members,error:memError}=await client.from('creator_memberships').select('user_id,tier,status').eq('status','active').in('tier',['pro','studio']).limit(500);
- if(memError)throw Error('Could not check active memberships: '+memError.message);
- const ids=[...new Set((members||[]).map(x=>x.user_id).filter(Boolean))];if(!ids.length)return [];
+ // Discover eligible public creator IDs without reading anyone else's private billing record.
+ const {data:members,error:memError}=await client.rpc('sh_public_premium_creator_ids');
+ if(memError)throw Error('Premium creator discovery failed: '+memError.message);
+ const ids=[...new Set((members||[]).map(row=>row.user_id).filter(Boolean))];
+ if(!ids.length)return [];
  const {data,error}=await client.from('profiles').select('id,display_name,city,state,role,specialty,specialties,hourly_rate,avatar_url,cover_url,bio,is_public').eq('is_public',true).in('id',ids).limit(500);
- if(error)throw Error('Could not load creator profiles: '+error.message);
+ if(error)throw Error('Could not load public creator profiles: '+error.message);
  return data||[];
 };
 window.shTop5SendInquiry=async function(input){
