@@ -711,3 +711,27 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setupIntro,{once:true});else setupIntro();
 })();
+
+
+/* V29: Welcome introduction recovery. Scoped to sh72 overlay. */
+(()=>{
+ 'use strict';
+ function init(){
+  const layer=document.getElementById('sh72Welcome'),next=document.getElementById('sh72Next'),skip=document.getElementById('sh72Skip');
+  if(!layer||!next||!skip||layer.dataset.sh29Init)return;
+  layer.dataset.sh29Init='1';
+  let stage=0;
+  const pages=[
+   ['Great work starts<br><em>with great people.</em>','Show your photography and films. Find collaborators. Get discovered for your next project.'],
+   ['Your work deserves<br><em>to be seen.</em>','Build a free creative portfolio, discover other professionals, and find real posted opportunities.'],
+   ['Start free.<br><em>Explore what’s next.</em>','Create your free profile. A seven-day Pro trial is not yet available to activate.']
+  ];
+  function close(){layer.hidden=true;layer.style.display='none';document.body.style.overflow='';try{localStorage.setItem('sh72_welcome_seen','1');sessionStorage.setItem('sh72_preview_seen','1')}catch(_){}}
+  function render(){const title=document.getElementById('sh72WelcomeTitle'),body=document.getElementById('sh72WelcomeBody'),step=document.getElementById('sh72Step');if(title)title.innerHTML=pages[stage][0];if(body)body.textContent=pages[stage][1];if(step)step.textContent='0'+(stage+1)+' / 03';next.textContent=stage===2?'Create free profile →':'Continue →'}
+  next.addEventListener('click',event=>{if(layer.hidden)return;event.preventDefault();event.stopImmediatePropagation();if(stage<2){stage++;render()}else{close();if(typeof window.go==='function')window.go('account');else{const account=document.querySelector('[data-page="account"],a[href="#account"],button[onclick*="account"]');account?.click()}}},true);
+  skip.addEventListener('click',event=>{if(layer.hidden)return;event.preventDefault();event.stopImmediatePropagation();close()},true);
+  // Keep return visitors unblocked when welcome state was already completed.
+  try{if(localStorage.getItem('sh72_welcome_seen')==='1')close()}catch(_){}
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+})();
