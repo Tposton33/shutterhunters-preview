@@ -7,7 +7,7 @@ const $=id=>document.getElementById(id);
 const notice=$('connectionNotice'),guest=$('accountGuest'),member=$('accountMember'),msg=$('accountMessage');
 const choices=['Weddings','Commercial','Real Estate','Events','Portraits','Sports','Music Videos','Automotive','Drone','Fashion','Product','Documentary','Travel','Food','Wildlife','Other'];
 let v5Media=[],v5Filter='video';
-let client=null,user=null,profile=null,viewed=null,mode='received',publicList=[],creatorCache=new Map();
+let client=null,user=null,profile=null,viewed=null,mode='new',publicList=[],creatorCache=new Map();
 const say=(s)=>{msg.textContent=s};
 const billingStatus=()=>document.getElementById('stripeBillingStatus');
 function billingMessage(message){const el=billingStatus();if(el)el.textContent=message;}
@@ -709,16 +709,34 @@ function startInquiry(p){if(!user){go('account');say('Sign in or create a free a
 $('closeInquiry').onclick=()=>$('inquiryModal').classList.add('hidden');$('inquiryModal').addEventListener('click',e=>{if(e.target===$('inquiryModal'))$('inquiryModal').classList.add('hidden')});
 $('inquiryForm').addEventListener('submit',async e=>{e.preventDefault();if(!user||!viewed||viewed.id===user.id)return;const f=new FormData(e.target);const row={sender_id:user.id,recipient_id:viewed.id,subject:String(f.get('subject')).trim(),message:(String(f.get('location')||'').trim()?'Location: '+String(f.get('location')).trim()+'\n':'')+String(f.get('message')).trim(),event_date:f.get('event_date')||null,budget:f.get('budget')?Number(f.get('budget')):null};$('inquiryFormStatus').textContent='Sending…';const {data:created,error}=await client.from('inquiries').insert(row).select('id').single();if(error){$('inquiryFormStatus').textContent='Could not send: '+error.message;return}// The invitation starts a conversation immediately; no approval step is required.
 $('inquiryForm').reset();$('inquiryModal').classList.add('hidden');alert('Your project inquiry was sent! View it in Sent Inquiries.');go('inquiries');mode='sent';await loadInquiries()});
-$('receivedTab').onclick=()=>{mode='received';loadInquiries()};$('sentTab').onclick=()=>{mode='sent';loadInquiries()};
+$('receivedTab').onclick=()=>{mode='new';loadInquiries()};$('sentTab').onclick=()=>{mode='sent';loadInquiries()};$('sh38InboxTab').onclick=()=>{mode='inbox';loadInquiries()};
 let shActiveInquiry=null;let shThreadLoadToken=0;
 async function shOpenThread(inquiry){
  if(!user||![inquiry.sender_id,inquiry.recipient_id].includes(user.id))return;
+ const state=await sh38State(inquiry.id);
+ if(inquiry.recipient_id===user.id&&state!=='conversation'){alert('Review the inquiry and choose Start Conversation first.');return}
+ if(state!=='conversation'){alert('The creator has not started this conversation yet.');return}
  shActiveInquiry=inquiry;
  const section=$('shThread');section.hidden=false;
  $('shThreadTitle').textContent=inquiry.subject||'Project conversation';
  $('shThreadContext').textContent='Original request: '+(inquiry.message||'')+(inquiry.event_date?' · Project date '+inquiry.event_date:'');
+ const contract=$('sh38Contract');contract.hidden=inquiry.sender_id!==user.id;
  $('shReplyText').value='';$('shReplyStatus').textContent='';
  await shLoadThread();section.scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function sh38State(id){
+ const {data,error}=await client.from('sh38_inquiry_states').select('phase').eq('inquiry_id',id).maybeSingle();
+ if(error)throw Error('Inquiry states unavailable. Run the V38 SQL first: '+error.message);
+ return data?.phase||'new';
+}
+async function sh38SetState(i,phase){
+ const {error}=await client.rpc('sh38_transition_inquiry',{p_inquiry_id:i.id,p_phase:phase});
+ if(error)throw Error(error.message);
+ if(phase==='declined'){
+   const {error:notifyError}=await client.from('inquiry_messages').insert({inquiry_id:i.id,sender_id:user.id,body:'I have declined this project inquiry.'});
+   if(notifyError)console.warn('Decline recorded, but reply notification failed:',notifyError.message);
+ }
+ await loadInquiries();
 }
 async function shLoadThread(){
  if(!shActiveInquiry||!user)return;
@@ -747,28 +765,59 @@ $('shReplyForm').addEventListener('submit',async e=>{
 });
 async function loadInquiries(){
  if(!user){$('shThread').hidden=true;shActiveInquiry=null;return}
- $('receivedTab').classList.toggle('on',mode==='received');$('sentTab').classList.toggle('on',mode==='sent');
- const key=mode==='received'?'recipient_id':'sender_id';
- const {data,error}=await client.from('inquiries').select('*').eq(key,user.id).order('created_at',{ascending:false}).limit(100);
+ for(const [id,value] of [['receivedTab','new'],['sh38InboxTab','inbox'],['sentTab','sent']])$(id).classList.toggle('on',mode===value);
+ const key=mode==='new'?'recipient_id':mode==='sent'?'sender_id':null;
+ let query=client.from('inquiries').select('*').order('created_at',{ascending:false}).limit(100);
+ if(key)query=query.eq(key,user.id);else query=query.or('sender_id.eq.'+user.id+',recipient_id.eq.'+user.id);
+ const {data,error}=await query;
  const out=$('inquiryList');out.replaceChildren();
- $('inquiryStatus').textContent=error?'Inbox unavailable: '+error.message:!(data||[]).length?'No '+mode+' inquiries yet.':`${data.length} ${mode} inquiries`;
- if(error)return;await updateInquiryBadge();
- for(const i of data||[]){
-  const d=document.createElement('article');d.className='inquiry-card';const top=document.createElement('header');top.append(text('h3',i.subject),text('span','Conversation','tag'));
+ if(error){$('inquiryStatus').textContent='Inbox unavailable: '+error.message;return}
+ const ids=(data||[]).map(i=>i.id);let states=[];
+ if(ids.length){const response=await client.from('sh38_inquiry_states').select('inquiry_id,phase').in('inquiry_id',ids);if(response.error){$('inquiryStatus').textContent='Inquiry statuses unavailable. Please install V38 SQL: '+response.error.message;return}states=response.data||[]}
+ const stateMap=new Map(states.map(x=>[x.inquiry_id,x.phase]));
+ const state=i=>stateMap.get(i.id)||'new';
+ const visible=(data||[]).filter(i=>mode==='new'?state(i)==='new':mode==='inbox'?state(i)==='conversation':true);
+ $('inquiryStatus').textContent=visible.length?visible.length+' '+(mode==='new'?'new inquiries':mode==='inbox'?'conversations':'sent inquiries'):'No '+(mode==='new'?'new inquiries':mode==='inbox'?'conversations':'sent inquiries')+' yet.';
+ for(const i of visible){
+  const phase=state(i),received=i.recipient_id===user.id;
+  const d=document.createElement('article');d.className='inquiry-card';const top=document.createElement('header');top.append(text('h3',i.subject||'Project inquiry'),text('span',phase==='new'?'Pending response':phase==='declined'?'Declined':'Conversation','tag'));
   const when=i.event_date?' · Project date '+i.event_date:'';
-  d.append(top,text('small',new Date(i.created_at).toLocaleString()+when),text('p',i.message));
-  if(i.budget!==null)d.append(text('p','Budget: $'+i.budget));
-  const open=text('button','✉ Open conversation →','sh-open-thread');open.type='button';open.onclick=()=>shOpenThread(i);d.append(open);
-  // V37: Project invitations are conversations, not approval workflows.
-  // Booking/contract approval remains a separate future process.
-  out.append(d)
+  d.append(top,text('small',new Date(i.created_at).toLocaleString()+when),text('p',i.message||''));
+  if(i.budget!=null)d.append(text('p','Budget: $'+Number(i.budget).toLocaleString()));
+  const actions=document.createElement('div');actions.className='sh38-actions';
+  const add=(label,fn,secondary=false)=>{const btn=text('button',label,secondary?'filter':'action');btn.type='button';btn.onclick=fn;actions.append(btn)};
+  if(received&&phase==='new'){
+    add('View Job',()=>sh38ShowJob(i),true);
+    add('Start Conversation',async()=>{try{await sh38SetState(i,'conversation');mode='inbox';await loadInquiries();await shOpenThread(i)}catch(e){alert(e.message)}});
+    add('Decline Inquiry',async()=>{if(!confirm('Decline this project invitation? It will disappear from New Inquiries.'))return;try{await sh38SetState(i,'declined')}catch(e){alert(e.message)}},true);
+  }else if(phase==='conversation')add('Open Conversation →',()=>shOpenThread(i));
+  else if(!received&&phase==='new')add('Awaiting creator response',()=>{},true);
+  if(actions.childElementCount)d.append(actions);out.append(d);
  }
- if(shActiveInquiry){const updated=(data||[]).find(x=>x.id===shActiveInquiry.id);if(updated)shActiveInquiry=updated;else{$('shThread').hidden=true;shActiveInquiry=null}}
- // Keep fictional Top Five test invitations in the native Sent tab after database repaint.
- // They are explicitly local-only; real messages still come exclusively from Supabase.
+ if(shActiveInquiry){const matched=visible.find(x=>x.id===shActiveInquiry.id);if(matched)shActiveInquiry=matched;else{$('shThread').hidden=true;shActiveInquiry=null}}
  if(mode==='sent')window.ShutterHuntersTopFive?.refreshDemoSent?.();
+ await updateInquiryBadge();
 }
-async function updateInquiryBadge(){if(!user)return;const {count,error}=await client.from('inquiries').select('id',{count:'exact',head:true}).eq('recipient_id',user.id).eq('status','new');if(error)return;const n=count||0;$('navInboxCount').textContent=n;$('navInboxCount').classList.toggle('hidden',!n);$('hubInboxCount').textContent=n?'('+n+' new)':''}
+async function sh38ShowJob(inquiry){
+ const existing=document.getElementById('sh38JobDialog');existing?.remove();
+ const dialog=document.createElement('dialog');dialog.id='sh38JobDialog';dialog.style.cssText='max-width:min(620px,94vw);max-height:85vh;overflow:auto;border:1px solid #bd9361;border-radius:18px;padding:26px;background:#162d30;color:#f6eee2;box-shadow:0 15px 70px #0009';
+ dialog.append(text('small','PROJECT INVITATION'),text('h2',inquiry.subject||'Project inquiry'));
+ if(inquiry.event_date)dialog.append(text('p','Project date: '+inquiry.event_date));
+ if(inquiry.budget!=null)dialog.append(text('p','Budget: $'+Number(inquiry.budget).toLocaleString()));
+ const desc=text('p',inquiry.message||'No additional information provided.');desc.style.whiteSpace='pre-wrap';dialog.append(desc);
+ const note=text('p','Review this invitation. Start Conversation to discuss details; this does not book the job.');note.style.fontSize='13px';dialog.append(note);
+ const close=text('button','Close','filter');close.type='button';close.onclick=()=>dialog.close();dialog.append(close);
+ document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
+}
+async function updateInquiryBadge(){
+ if(!user)return;
+ const {data,error}=await client.from('inquiries').select('id').eq('recipient_id',user.id).order('created_at',{ascending:false}).limit(100);
+ if(error)return;
+ const ids=(data||[]).map(x=>x.id);let answered=new Set();
+ if(ids.length){const r=await client.from('sh38_inquiry_states').select('inquiry_id').in('inquiry_id',ids);if(r.error)return;answered=new Set((r.data||[]).map(x=>x.inquiry_id))}
+ const n=ids.filter(id=>!answered.has(id)).length;
+ $('navInboxCount').textContent=n;$('navInboxCount').classList.toggle('hidden',!n);$('hubInboxCount').textContent=n?'('+n+' new)':'';
+}
 // Refresh notification count while the app is open; no push permissions requested.
 let sh19PrevUnread=null;
 async function sh19PollNew(){if(!user||document.hidden)return;const {count,error}=await client.from('inquiries').select('id',{count:'exact',head:true}).eq('recipient_id',user.id).eq('status','new');if(error)return;
@@ -1019,11 +1068,15 @@ window.shLoadBookings=async function(){
  }
 };
 window.shRequestBooking=async function(jobId,creatorId){
- const note=$('shSpotStatus');if(note)note.textContent='Sending booking request…';const viewer=await shGetViewer();if(!viewer){if(note)note.textContent='Please sign in to request a booking.';go('account');return}
- const {error}=await client.rpc('sh_request_booking',{p_job_id:jobId,p_creator_id:creatorId});
- if(error){if(note)note.textContent='Booking request not sent: '+error.message;else alert(error.message);return}
- if(note)note.textContent='Booking request sent! The creator must accept before the job is closed or their date becomes booked.';
- await window.shLoadBookings();
+ const note=$('shSpotStatus'),viewer=await shGetViewer();
+ if(!viewer){if(note)note.textContent='Please sign in to invite a creator.';go('account');return}
+ if(viewer.id===creatorId){if(note)note.textContent='You cannot invite yourself.';return}
+ const {data:job,error:jobError}=await client.from('sh_job_posts').select('id,client_id,title,details,location,budget,event_date').eq('id',jobId).maybeSingle();
+ if(jobError||!job||job.client_id!==viewer.id){if(note)note.textContent='Only the job owner can invite a creator to this project.';return}
+ const message=[job.location?'Location: '+job.location:'',job.details||'Please review the project and let me know if you would like to talk.'].filter(Boolean).join('\n');
+ const {error}=await client.from('inquiries').insert({sender_id:viewer.id,recipient_id:creatorId,subject:job.title||'Project invitation',message,budget:job.budget,event_date:job.event_date||null});
+ if(note)note.textContent=error?'Invitation not sent: '+error.message:'Project inquiry sent! The creator can review it under New Inquiries.';
+ if(!error){mode='sent';await updateInquiryBadge()}
 };
 // Fictional UI-only Spotlight demonstration cards. No auth accounts, database rows, subscriptions,
 // or private calendar entries are created. Never use these for a public job or real booking.
@@ -1260,7 +1313,7 @@ function shRenderSchedule(){
  const upcoming=$('shCalUpcoming');upcoming.replaceChildren();
  for(const [day,items] of [...sh19CalItems.entries()].sort((a,b)=>a[0].localeCompare(b[0]))){for(const item of items){
    const x=document.createElement('button');x.type='button';x.className='sh19-calendar-inquiry';x.textContent='🟡 '+shDateShort(day)+' · '+item.inquiry.subject+' · '+item.phase.replaceAll('_',' ');
-   x.onclick=()=>{go('inquiries');mode=item.inquiry.sender_id===user.id?'sent':'received';loadInquiries().then(()=>shOpenThread(item.inquiry))};upcoming.append(x);
+   x.onclick=()=>{go('inquiries');mode=item.inquiry.sender_id===user.id?'sent':'inbox';loadInquiries().then(()=>shOpenThread(item.inquiry))};upcoming.append(x);
  }}
  const today=shDateLocal(new Date());const rows=[...shCal.rows.values()].filter(r=>r.status==='booked'&&r.day>=today).sort((a,b)=>a.day.localeCompare(b.day)).slice(0,8);
  if(!rows.length)upcoming.append(text('p','No upcoming booked dates in the loaded calendar.','subtle'));
