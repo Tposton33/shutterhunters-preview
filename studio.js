@@ -711,8 +711,43 @@ $('inquiryForm').addEventListener('submit',async e=>{e.preventDefault();if(!user
 $('inquiryForm').reset();$('inquiryModal').classList.add('hidden');alert('Your project inquiry was sent! View it in Sent Inquiries.');go('inquiries');mode='sent';await loadInquiries()});
 $('receivedTab').onclick=()=>{mode='new';loadInquiries()};$('sentTab').onclick=()=>{mode='sent';loadInquiries()};$('sh38InboxTab').onclick=()=>{mode='inbox';loadInquiries()};
 let shActiveInquiry=null;let shThreadLoadToken=0;
+// V39: private per-account conversation pins. The database enforces ownership.
+async function sh39GetPinnedIds(){
+ const {data,error}=await client.from('sh39_conversation_pins').select('inquiry_id').eq('user_id',user.id);
+ if(error)throw Error('Conversation pins unavailable. Run the V39 SQL: '+error.message);
+ return new Set((data||[]).map(row=>row.inquiry_id));
+}
+async function sh39TogglePin(inquiryId,isPinned){
+ if(!user)return;
+ if(isPinned){
+  const {error}=await client.from('sh39_conversation_pins').delete().eq('user_id',user.id).eq('inquiry_id',inquiryId);
+  if(error)throw Error(error.message);
+ }else{
+  const {error}=await client.from('sh39_conversation_pins').insert({user_id:user.id,inquiry_id:inquiryId});
+  if(error)throw Error(error.message);
+ }
+ await loadInquiries();
+}
+
+// V40: hide a thread only for the signed-in account; never delete shared messages.
+async function sh40GetHiddenIds(){
+ const {data,error}=await client.from('sh40_hidden_inquiries').select('inquiry_id').eq('user_id',user.id);
+ if(error)throw Error('Hidden conversations unavailable. Run the V40 SQL: '+error.message);
+ return new Set((data||[]).map(row=>row.inquiry_id));
+}
+async function sh40HideInquiry(inquiry){
+ if(!user||![inquiry.sender_id,inquiry.recipient_id].includes(user.id))return;
+ if(!confirm('Remove this inquiry from your messages? It will disappear from New Inquiries, Inbox and Sent on your account only. The other person keeps their copy.'))return;
+ const {error}=await client.from('sh40_hidden_inquiries').upsert({user_id:user.id,inquiry_id:inquiry.id},{onConflict:'user_id,inquiry_id'});
+ if(error){alert('Could not remove this conversation: '+error.message);return}
+ // A hidden conversation should not remain pinned for this user.
+ await client.from('sh39_conversation_pins').delete().eq('user_id',user.id).eq('inquiry_id',inquiry.id);
+ if(shActiveInquiry?.id===inquiry.id){$('shThread').hidden=true;shActiveInquiry=null;shThreadLoadToken++}
+ await loadInquiries();
+}
 async function shOpenThread(inquiry){
  if(!user||![inquiry.sender_id,inquiry.recipient_id].includes(user.id))return;
+ try{if((await sh40GetHiddenIds()).has(inquiry.id)){alert('This conversation was removed from your messages.');return}}catch(e){alert(e.message);return}
  const state=await sh38State(inquiry.id);
  if(inquiry.recipient_id===user.id&&state!=='conversation'){alert('Review the inquiry and choose Start Conversation first.');return}
  if(state!=='conversation'){alert('The creator has not started this conversation yet.');return}
@@ -776,7 +811,17 @@ async function loadInquiries(){
  if(ids.length){const response=await client.from('sh38_inquiry_states').select('inquiry_id,phase').in('inquiry_id',ids);if(response.error){$('inquiryStatus').textContent='Inquiry statuses unavailable. Please install V38 SQL: '+response.error.message;return}states=response.data||[]}
  const stateMap=new Map(states.map(x=>[x.inquiry_id,x.phase]));
  const state=i=>stateMap.get(i.id)||'new';
- const visible=(data||[]).filter(i=>mode==='new'?state(i)==='new':mode==='inbox'?state(i)==='conversation':true);
+ let pinnedIds;
+ try{pinnedIds=await sh39GetPinnedIds()}catch(pinError){$('inquiryStatus').textContent=pinError.message;return}
+ let hiddenIds;
+ try{hiddenIds=await sh40GetHiddenIds()}catch(hiddenError){$('inquiryStatus').textContent=hiddenError.message;return}
+ const visible=(data||[]).filter(i=>!hiddenIds.has(i.id)&&(mode==='new'?(i.recipient_id===user.id&&state(i)==='new'):mode==='inbox'?state(i)==='conversation':true));
+ // Pins reorder conversations only, never new inquiries or declined invitations.
+ if(mode==='inbox'||mode==='sent')visible.sort((a,b)=>{
+  const ap=state(a)==='conversation'&&pinnedIds.has(a.id)?1:0;
+  const bp=state(b)==='conversation'&&pinnedIds.has(b.id)?1:0;
+  return bp-ap||new Date(b.created_at)-new Date(a.created_at);
+ });
  $('inquiryStatus').textContent=visible.length?visible.length+' '+(mode==='new'?'new inquiries':mode==='inbox'?'conversations':'sent inquiries'):'No '+(mode==='new'?'new inquiries':mode==='inbox'?'conversations':'sent inquiries')+' yet.';
  for(const i of visible){
   const phase=state(i),received=i.recipient_id===user.id;
@@ -784,6 +829,9 @@ async function loadInquiries(){
   const when=i.event_date?' · Project date '+i.event_date:'';
   d.append(top,text('small',new Date(i.created_at).toLocaleString()+when),text('p',i.message||''));
   if(i.budget!=null)d.append(text('p','Budget: $'+Number(i.budget).toLocaleString()));
+  if(phase==='conversation'&&pinnedIds.has(i.id)){
+   const pinTag=text('span','📌 Pinned','tag');pinTag.title='Pinned to the top of your conversations';top.append(pinTag);
+  }
   const actions=document.createElement('div');actions.className='sh38-actions';
   const add=(label,fn,secondary=false)=>{const btn=text('button',label,secondary?'filter':'action');btn.type='button';btn.onclick=fn;actions.append(btn)};
   if(received&&phase==='new'){
@@ -792,6 +840,13 @@ async function loadInquiries(){
     add('Decline Inquiry',async()=>{if(!confirm('Decline this project invitation? It will disappear from New Inquiries.'))return;try{await sh38SetState(i,'declined')}catch(e){alert(e.message)}},true);
   }else if(phase==='conversation')add('Open Conversation →',()=>shOpenThread(i));
   else if(!received&&phase==='new')add('Awaiting creator response',()=>{},true);
+  if(phase==='conversation'&&(mode==='inbox'||mode==='sent')){
+   const isPinned=pinnedIds.has(i.id);
+   add(isPinned?'📌 Unpin Conversation':'📌 Pin Conversation',async()=>{
+    try{await sh39TogglePin(i.id,isPinned)}catch(err){alert('Could not save pin: '+err.message)}
+   },true);
+  }
+  add('🗑 Remove from My Messages',()=>sh40HideInquiry(i),true);
   if(actions.childElementCount)d.append(actions);out.append(d);
  }
  if(shActiveInquiry){const matched=visible.find(x=>x.id===shActiveInquiry.id);if(matched)shActiveInquiry=matched;else{$('shThread').hidden=true;shActiveInquiry=null}}
