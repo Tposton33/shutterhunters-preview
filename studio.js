@@ -7,6 +7,7 @@ const $=id=>document.getElementById(id);
 const notice=$('connectionNotice'),guest=$('accountGuest'),member=$('accountMember'),msg=$('accountMessage');
 const choices=['Weddings','Commercial','Real Estate','Events','Portraits','Sports','Music Videos','Automotive','Drone','Fashion','Product','Documentary','Travel','Food','Wildlife','Other'];
 let v5Media=[],v5Filter='video';
+window.sh41Db=()=>client;
 let client=null,user=null,profile=null,viewed=null,mode='new',publicList=[],creatorCache=new Map();
 const say=(s)=>{msg.textContent=s};
 const billingStatus=()=>document.getElementById('stripeBillingStatus');
@@ -710,7 +711,7 @@ $('closeInquiry').onclick=()=>$('inquiryModal').classList.add('hidden');$('inqui
 $('inquiryForm').addEventListener('submit',async e=>{e.preventDefault();if(!user||!viewed||viewed.id===user.id)return;const f=new FormData(e.target);const row={sender_id:user.id,recipient_id:viewed.id,subject:String(f.get('subject')).trim(),message:(String(f.get('location')||'').trim()?'Location: '+String(f.get('location')).trim()+'\n':'')+String(f.get('message')).trim(),event_date:f.get('event_date')||null,budget:f.get('budget')?Number(f.get('budget')):null};$('inquiryFormStatus').textContent='Sending…';const {data:created,error}=await client.from('inquiries').insert(row).select('id').single();if(error){$('inquiryFormStatus').textContent='Could not send: '+error.message;return}// The invitation starts a conversation immediately; no approval step is required.
 $('inquiryForm').reset();$('inquiryModal').classList.add('hidden');alert('Your project inquiry was sent! View it in Sent Inquiries.');go('inquiries');mode='sent';await loadInquiries()});
 $('receivedTab').onclick=()=>{mode='new';loadInquiries()};$('sentTab').onclick=()=>{mode='sent';loadInquiries()};$('sh38InboxTab').onclick=()=>{mode='inbox';loadInquiries()};
-let shActiveInquiry=null;let shThreadLoadToken=0;
+let shActiveInquiry=null;window.sh41ActiveInquiry=()=>shActiveInquiry;let shThreadLoadToken=0;
 // V39: private per-account conversation pins. The database enforces ownership.
 async function sh39GetPinnedIds(){
  const {data,error}=await client.from('sh39_conversation_pins').select('inquiry_id').eq('user_id',user.id);
@@ -745,6 +746,7 @@ async function sh40HideInquiry(inquiry){
  if(shActiveInquiry?.id===inquiry.id){$('shThread').hidden=true;shActiveInquiry=null;shThreadLoadToken++}
  await loadInquiries();
 }
+window.sh41OpenInquiry=async(id)=>{const r=await client.from('inquiries').select('*').eq('id',id).single();if(r.error)throw Error(r.error.message);go('inquiries');mode=r.data.sender_id===user.id?'sent':'inbox';await loadInquiries();await shOpenThread(r.data)};
 async function shOpenThread(inquiry){
  if(!user||![inquiry.sender_id,inquiry.recipient_id].includes(user.id))return;
  try{if((await sh40GetHiddenIds()).has(inquiry.id)){alert('This conversation was removed from your messages.');return}}catch(e){alert(e.message);return}
