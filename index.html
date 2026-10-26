@@ -562,28 +562,33 @@ body{width:100%;max-width:100%;overflow-x:clip}
 @media(max-width:920px){.sh-dir-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.sh-dir-toolbar{grid-template-columns:1fr 1fr}.sh-dir-toolbar .filter{align-self:end}}
 @media(max-width:580px){.sh-dir-grid{grid-template-columns:1fr}.sh-dir-toolbar{grid-template-columns:1fr;gap:10px}.sh-dir-heading{align-items:start;flex-direction:column}.sh-dir-legend{font-size:11px}.sh-dir-cover{height:165px}.v13-app-nav{gap:0;padding-left:2px;padding-right:2px}.v13-app-nav button{min-width:0;flex:1;padding-left:1px!important;padding-right:1px!important}.v13-app-nav button span{font-size:10px!important}}
 </style><style id="sh-schedule-css">
-.sh-cal-page{max-width:1080px}.sh-cal-toolbar,.sh-cal-key,.sh-cal-buttons,.sh-cal-fields{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.sh-cal-toolbar{justify-content:space-between;margin:24px 0}.sh-cal-toolbar h2{font-size:clamp(21px,4vw,30px)}.sh-cal-key{margin:12px 0 20px;font-size:13px}.sh-cal-key span{padding:7px 10px;background:#f8f2e9;border-radius:9px}.sh-available{color:#137345!important}.sh-busy{color:#bb3840!important}.sh-unknown{color:#697673!important}.sh-cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}.sh-cal-grid .sh-cal-heading{text-align:center;font-size:12px;padding:8px 0;color:#61716b}.sh-cal-day{min-width:0;min-height:86px;border:1px solid #c9bcab;border-radius:10px;background:#fffaf3;color:#1b302f;text-align:left;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;padding:9px;cursor:pointer}.sh-cal-day:focus-visible{outline:3px solid #bd8b49}.sh-cal-day.selected{outline:2px solid #b78b53}.sh-cal-day .sh-cal-emoji{font-size:18px}.sh-cal-day.sh-day-available{background:#e9f7ec;border-color:#63a27c}.sh-cal-day.sh-day-booked{background:#ffedeb;border-color:#d77b72}.sh-cal-day.sh-day-unknown{background:#f7f5f0}.sh-cal-day small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.sh-cal-edit,.sh-cal-reminder{margin:24px 0}.sh-cal-fields>*{flex:1 1 200px}.sh-cal-edit .field{display:flex;flex-direction:column;gap:7px}.sh-cal-edit input,.sh-cal-edit select,.sh-cal-edit textarea,.sh-profile-availability input{max-width:100%;width:100%;box-sizing:border-box;padding:12px;border:1px solid #cbbdae;border-radius:8px;background:#fff;color:#1b302f;font:inherit}.sh-cal-edit form{display:grid;gap:14px}.sh-cal-upcoming-item{padding:14px;border-bottom:1px solid #c7b9a5}.sh-profile-availability{padding:18px;margin:24px 0;background:#f1e8da;color:#192f2e;border:1px solid #c7b08f;border-radius:14px;max-width:460px}.sh-profile-availability label{display:block;margin:8px 0;font-weight:600}.sh-profile-availability small{display:block;color:#5b6661;margin-top:10px}.sh-camera{margin-top:12px;border-radius:9px;padding:12px;background:#fff;font-weight:700}.sh-camera.sh-available{background:#e2f5e6}.sh-camera.sh-busy{background:#ffebea}.sh-camera.sh-unknown{background:#f1f3f2}@media(max-width:620px){.sh-cal-grid{gap:3px}.sh-cal-day{min-height:65px;padding:5px;border-radius:6px;font-size:12px}.sh-cal-day small{display:none}.sh-cal-toolbar .filter{padding:9px!important;font-size:12px}.sh-cal-page{padding-inline:12px}}
-
-/* V13.5.15 — profile-style, job-specific candidate shortlist */
-#shJobShortlistList{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:20px;align-items:stretch}
-.sh-shortlist-profile-card{background:#fffaf1;border:1px solid #d7bf9c;border-radius:18px;overflow:hidden;min-width:0;box-shadow:0 15px 34px #352b1b12;display:flex;flex-direction:column}
-.sh-shortlist-cover{height:175px;position:relative;overflow:hidden;background:linear-gradient(135deg,#172b2e,#687a78);display:flex;align-items:center;justify-content:center}
-.sh-shortlist-cover img{height:100%;width:100%;object-fit:cover}
-.sh-shortlist-cover-initials{font-family:Georgia,serif;font-size:82px;color:#fff0d6;text-shadow:0 4px 26px #0007}
-.sh-shortlist-cover-tag{position:absolute;right:12px;top:12px;border:1px solid #dab07b;background:#0d1a1bdc;color:#f3ce98;border-radius:20px;padding:7px 11px;letter-spacing:.09em;font-weight:800;font-size:10px}
-.sh-shortlist-avatar{z-index:1;position:relative;margin:-36px 0 0 18px;width:72px;height:72px;flex:none;border-radius:50%;border:4px solid #fffaf1;color:#fff9ea;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:21px;overflow:hidden;background:#435a59}
-.sh-shortlist-avatar img{width:100%;height:100%;object-fit:cover}
-.sh-shortlist-profile-body{padding:14px 20px 20px;display:flex;flex-direction:column;gap:10px;flex:1}
-.sh-shortlist-profile-body h3{font-family:Georgia,serif;font-size:25px;line-height:1.15;color:#132326;margin:0}
-.sh-shortlist-meta{color:#66665c;font-size:13px;line-height:1.5;margin:0}
-.sh-shortlist-bio{color:#4b5550;font-size:13px;line-height:1.6;margin:0}
-.sh-shortlist-tier{align-self:flex-start;color:#7c5429;background:#f1e5d2;padding:5px 10px;border-radius:20px;font-size:10px;letter-spacing:.08em;font-weight:800}
-.sh-shortlist-skills{display:flex;gap:6px;flex-wrap:wrap}.sh-shortlist-skills span{padding:5px 9px;border-radius:18px;background:#eee4d3;font-size:11px;color:#473e35}
-.sh-shortlist-primary{margin-top:auto!important;width:100%;padding:12px;border-radius:9px;background:#dfad6d!important;color:#142124!important;border:1px solid #c9975c!important;font-weight:800;cursor:pointer}
-.sh-shortlist-primary:hover{background:#edc28c!important}
-.sh-shortlist-remove{width:100%;padding:11px;border-radius:9px;border:1px solid #cebda4!important;background:transparent!important;color:#65533b!important;font-size:12px;font-weight:700;cursor:pointer}
-.sh-shortlist-demo-detail{padding:12px;background:#f1e7d6;border-radius:9px;font-size:12px;color:#4a453b;line-height:1.6}.sh-shortlist-demo-detail p{margin:0}
-@media(max-width:550px){#shJobShortlistList{grid-template-columns:1fr}.sh-shortlist-cover{height:195px}}
+.sh-cal-page{max-width:1080px;position:relative;padding-top:28px;padding-bottom:calc(128px + env(safe-area-inset-bottom,0px));color:#f6eee2}
+.sh-cal-page::before{content:"";position:absolute;top:-26px;bottom:-36px;left:50%;transform:translateX(-50%);width:100vw;background:radial-gradient(circle at 18% 14%,rgba(214,172,106,.20),transparent 26%),radial-gradient(circle at 82% 18%,rgba(63,119,152,.22),transparent 28%),linear-gradient(180deg,#091518 0%,#0d2024 46%,#11252b 100%);box-shadow:0 0 0 100vmax #091518;clip-path:inset(0 -100vmax);z-index:-1}
+.sh-cal-page>*{position:relative;z-index:1}
+.sh-cal-page .subtle{color:#d2d8d4}
+.sh-cal-page h1,.sh-cal-page h2{color:#fff5e8;margin-top:0}
+.sh-cal-page h1 em,.sh-cal-page h2 em{color:#e0b176;font-style:normal;font-family:Georgia,serif;font-weight:500}
+.sh-cal-toolbar,.sh-cal-key,.sh-cal-buttons{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.sh-cal-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.sh-cal-toolbar{justify-content:space-between;margin:26px 0 20px;padding:16px 18px;border-radius:18px;border:1px solid rgba(218,177,113,.25);background:linear-gradient(135deg,rgba(255,255,255,.04),rgba(255,255,255,.02));backdrop-filter:blur(6px);box-shadow:0 18px 40px rgba(0,0,0,.24)}
+.sh-cal-toolbar h2{font-size:clamp(21px,4vw,30px);margin:0}
+.sh-cal-key{margin:16px 0 24px;font-size:13px}.sh-cal-key span{padding:9px 12px;background:rgba(255,255,255,.06);border:1px solid rgba(220,170,104,.22);border-radius:999px;color:#eff4f1}
+.sh-available{color:#8fe1a9!important}.sh-busy{color:#ef9d8d!important}.sh-unknown{color:#c6d0ce!important}
+.sh-cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;padding:16px;border-radius:24px;border:1px solid rgba(216,177,115,.28);background:linear-gradient(180deg,rgba(9,20,23,.86),rgba(15,31,35,.92));box-shadow:0 24px 60px rgba(0,0,0,.30);margin-bottom:22px}.sh-cal-grid .sh-cal-heading{text-align:center;font-size:11px;padding:8px 0;color:#cfb18a;letter-spacing:.16em;text-transform:uppercase}
+.sh-cal-day{min-width:0;min-height:82px;border:1px solid rgba(201,188,171,.18);border-radius:14px;background:rgba(255,255,255,.045);color:#f8f2ea;text-align:left;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;padding:10px;cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease,background .16s ease;box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+.sh-cal-day:hover{transform:translateY(-1px);border-color:rgba(220,170,104,.45);box-shadow:0 10px 18px rgba(0,0,0,.24)}
+.sh-cal-day:focus-visible{outline:3px solid #d8a965;outline-offset:2px}.sh-cal-day.selected{outline:2px solid #d8a965;border-color:#d8a965;box-shadow:0 0 0 2px rgba(216,169,101,.18)}
+.sh-cal-day .sh-cal-emoji{font-size:18px}.sh-cal-day.sh-day-available{background:linear-gradient(180deg,rgba(78,150,112,.34),rgba(38,91,67,.44));border-color:rgba(118,202,152,.52)}.sh-cal-day.sh-day-booked{background:linear-gradient(180deg,rgba(135,74,67,.5),rgba(88,45,42,.56));border-color:rgba(229,149,136,.45)}.sh-cal-day.sh-day-unknown{background:rgba(255,255,255,.05)}.sh-cal-day small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:#d4ddd8}
+.sh-cal-edit,.sh-cal-reminder,.sh41-schedule-agreements,.sh-cal-bulk{margin:24px 0;border:1px solid rgba(216,177,115,.24);border-radius:24px;background:linear-gradient(145deg,rgba(9,33,37,.92),rgba(13,38,43,.96));box-shadow:0 24px 60px rgba(0,0,0,.22)}
+.sh-cal-edit,.sh-cal-reminder,.sh41-schedule-agreements{padding:clamp(20px,4vw,34px)}
+.sh-cal-bulk{padding:22px}
+.sh-cal-fields>*{min-width:0}.sh-cal-edit .field{display:flex;flex-direction:column;gap:7px;color:#edf2ee}.sh-cal-edit input,.sh-cal-edit select,.sh-cal-edit textarea,.sh-profile-availability input{max-width:100%;width:100%;min-width:0;box-sizing:border-box;padding:15px 17px;border:1px solid rgba(216,177,115,.22);border-radius:16px;background:rgba(4,18,21,.62);color:#f5efe7;font:inherit;box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+.sh-cal-edit input::placeholder,.sh-cal-edit textarea::placeholder,.sh-profile-availability input::placeholder{color:#a9b7b0}.sh-cal-edit input:focus,.sh-cal-edit select:focus,.sh-cal-edit textarea:focus,.sh-profile-availability input:focus{outline:none;border-color:#d9af76;box-shadow:0 0 0 3px rgba(217,175,118,.12)}
+.sh-cal-edit form{display:grid;gap:16px}.sh-cal-edit p,.sh-cal-reminder p,.sh41-schedule-agreements p,.sh-cal-bulk p,.sh-cal-bulk small{color:#d2d9d3}
+.sh-cal-upcoming-item{padding:16px 0;border-bottom:1px solid rgba(255,255,255,.10)}.sh-cal-upcoming-item:last-child{border-bottom:none}
+.sh-profile-availability{padding:18px;margin:24px 0;background:linear-gradient(145deg,#10262a,#16343b);color:#eef4ef;border:1px solid rgba(216,177,115,.26);border-radius:18px;max-width:460px;box-shadow:0 16px 40px rgba(0,0,0,.18)}.sh-profile-availability label{display:block;margin:8px 0;font-weight:600}.sh-profile-availability small{display:block;color:#c2cfca;margin-top:10px}.sh-camera{margin-top:12px;border-radius:12px;padding:12px 14px;background:rgba(255,255,255,.08);font-weight:700}.sh-camera.sh-available{background:rgba(84,160,118,.26);color:#dff6e6}.sh-camera.sh-busy{background:rgba(173,86,75,.26);color:#ffe1dc}.sh-camera.sh-unknown{background:rgba(255,255,255,.07);color:#edf3f0}
+.sh41-schedule-agreements .sh41-date-card,.sh-cal-reminder .panel-lite{background:rgba(255,255,255,.04)}
+@media(max-width:760px){.sh-cal-page{padding-top:20px;padding-bottom:calc(132px + env(safe-area-inset-bottom,0px))}.sh-cal-fields{grid-template-columns:1fr}.sh-cal-toolbar{padding:14px 15px}.sh-cal-grid{padding:10px;gap:6px}.sh-cal-day{min-height:74px;padding:8px;border-radius:12px}.sh-cal-edit,.sh-cal-reminder,.sh41-schedule-agreements,.sh-cal-bulk{border-radius:22px}}
+@media(max-width:620px){.sh-cal-grid{gap:4px}.sh-cal-day{min-height:66px;padding:5px;border-radius:8px;font-size:12px}.sh-cal-day small{display:none}.sh-cal-toolbar .filter{padding:9px!important;font-size:12px}.sh-cal-page{padding-inline:12px}.sh-cal-key{gap:8px}.sh-cal-key span{font-size:12px;padding:8px 10px}}
 </style><style>
 .sh-job-top-cta{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin:18px 0 22px}.sh-job-top-cta .action{font-size:16px;padding:15px 24px}.sh-job-top-cta span{color:#66685f;font-size:13px}@media(max-width:600px){.sh-job-top-cta{align-items:stretch}.sh-job-top-cta .action{width:100%}}
 </style>
@@ -760,55 +765,6 @@ body.sh80-lock{overflow:hidden}
  .bottombar.v13-app-nav button span{font-size:clamp(8px,2.35vw,10px)!important;line-height:1.1!important;white-space:nowrap!important;}
  .bottombar.v13-app-nav button b{width:24px!important;height:24px!important;display:grid!important;place-items:center!important;}
  .bottombar.v13-app-nav .sh76-nav-icon{width:22px!important;height:22px!important;}
-}
-</style><style id="sh43-calendar-visual-only">
-/* V43: presentation-only calendar facelift; original elements, IDs and JS remain untouched. */
-#schedule.sh-cal-page{max-width:1150px;padding-bottom:120px}
-#schedule>.caps:first-child{display:inline-block;color:#dfba85!important;font-weight:800;letter-spacing:.22em;font-size:11px;margin:30px 0 15px}
-#schedule>#shCalTitle{font-family:Georgia,'Times New Roman',serif;font-size:clamp(38px,7vw,74px);line-height:1.08;letter-spacing:-.045em;margin:0 0 14px}
-#schedule>#shCalTitle em{color:#dcb279;font-style:italic}
-#schedule>#shCalTitle+p{max-width:680px;line-height:1.8;font-size:15px;margin-bottom:33px}
-#schedule .sh-cal-toolbar{background:linear-gradient(135deg,#1a2d2b,#1c3534);border:1px solid #53665b;border-radius:20px;padding:20px 22px;box-shadow:0 17px 45px #0002;margin:24px 0 18px;gap:12px}
-#schedule .sh-cal-toolbar h2{font-family:Georgia,serif;color:#f3e3cb;font-weight:600;letter-spacing:-.02em;margin:0}
-#schedule .sh-cal-toolbar .filter{background:#243d39!important;border:1px solid #ad8b62!important;color:#f7e5cb!important;border-radius:12px!important;min-height:43px;transition:background .2s,border-color .2s}
-#schedule .sh-cal-toolbar .filter:hover{background:#35544b!important;border-color:#e0b67e!important}
-#schedule .sh-cal-bulk,#schedule .sh-cal-edit,#schedule .sh-cal-reminder,#schedule .sh41-schedule-agreements{background:linear-gradient(145deg,#1a2929,#132222)!important;color:#f1e8dc!important;border:1px solid #526256!important;border-radius:20px!important;box-shadow:0 14px 40px #05090925;padding:clamp(18px,3vw,29px)}
-#schedule .sh-cal-bulk p,#schedule .sh-cal-bulk small,#schedule .sh-cal-edit p,#schedule .sh-cal-reminder p,#schedule .sh41-schedule-agreements p{color:#c5d0c8!important;line-height:1.65}
-#schedule .sh-cal-bulk .caps,#schedule .sh-cal-reminder .caps,#schedule .sh41-schedule-agreements .caps{color:#dcb279!important;letter-spacing:.17em}
-#schedule .sh-cal-key{gap:8px;margin:22px 0 16px}
-#schedule .sh-cal-key span{background:#203431!important;border:1px solid #566a5f!important;border-radius:100px!important;color:#f1e9df!important;padding:8px 13px}
-#schedule .sh-cal-key b.sh-available{color:#8cddae!important}#schedule .sh-cal-key b.sh-busy{color:#efaf9e!important}#schedule .sh-cal-key b.sh-unknown{color:#d0d5d0!important}
-#schedule .sh-cal-grid{gap:8px;background:linear-gradient(160deg,#1b2e2b,#0d1a1b);border:1px solid #536557;border-radius:22px;padding:clamp(9px,2vw,18px);box-shadow:0 22px 48px #0002}
-#schedule .sh-cal-grid .sh-cal-heading{font-size:11px;letter-spacing:.09em;font-weight:800;color:#cbb898!important;text-transform:uppercase;padding:11px 0}
-#schedule .sh-cal-grid .sh-cal-day{border-radius:13px!important;border:1px solid #50625a!important;min-height:92px;background:#263a35!important;color:#f9ebdb!important;transition:transform .16s,background .16s,box-shadow .16s;box-shadow:none}
-#schedule .sh-cal-grid .sh-cal-day:hover{transform:translateY(-2px);background:#344d43!important;border-color:#c19a67!important}
-#schedule .sh-cal-grid .sh-cal-day.sh-day-available{background:#224536!important;border-color:#558668!important}
-#schedule .sh-cal-grid .sh-cal-day.sh-day-booked{background:#4a302e!important;border-color:#9a6a5d!important}
-#schedule .sh-cal-grid .sh-cal-day.sh-day-unknown{background:#273a38!important}
-#schedule .sh-cal-grid .sh-cal-day.selected,#schedule .sh-cal-grid .sh-cal-day.sh-bulk-selected{outline:2px solid #f1c488!important;outline-offset:-3px}
-#schedule .sh-cal-edit h2,#schedule .sh-cal-reminder h2,#schedule .sh41-schedule-agreements h2{font-family:Georgia,serif;color:#fff4e2!important;font-size:clamp(25px,4vw,36px);margin-top:5px}
-#schedule .sh-cal-edit .field{color:#eee4d7!important}
-#schedule .sh-cal-edit input,#schedule .sh-cal-edit select,#schedule .sh-cal-edit textarea{background:#102120!important;border:1px solid #65766a!important;color:#fff4e2!important;border-radius:11px!important;min-height:43px}
-#schedule .sh-cal-edit input::placeholder,#schedule .sh-cal-edit textarea::placeholder{color:#9aaca3}
-#schedule .sh-cal-edit input:focus,#schedule .sh-cal-edit select:focus,#schedule .sh-cal-edit textarea:focus{outline:2px solid #e7b983;outline-offset:1px}
-#schedule .sh-cal-buttons .filter{border:1px solid #b39165!important;border-radius:11px!important;background:#203733!important;color:#f6e7d2!important}
-#schedule .sh-cal-buttons .action{border-radius:11px!important}
-#schedule .sh-cal-upcoming-item{background:#203733;border:1px solid #50685d;border-radius:12px;margin:9px 0;padding:15px;color:#f7ece1}
-@media(max-width:780px){
- .bottombar.v13-app-nav{grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:0!important;padding-left:max(3px,env(safe-area-inset-left))!important;padding-right:max(3px,env(safe-area-inset-right))!important;overflow:hidden!important}
- .bottombar.v13-app-nav button{min-width:0!important;padding:6px 1px!important;gap:3px!important}
- .bottombar.v13-app-nav button b{width:22px!important;height:22px!important}
- .bottombar.v13-app-nav .sh76-nav-icon{width:20px!important;height:20px!important}
- .bottombar.v13-app-nav button span{font-size:clamp(8px,1.9vw,10px)!important;line-height:1.12!important;letter-spacing:-.025em!important;white-space:nowrap!important}
- #schedule.sh-cal-page{padding-inline:11px!important}
- #schedule .sh-cal-toolbar{padding:13px 9px;gap:5px;border-radius:15px}
- #schedule .sh-cal-toolbar h2{font-size:clamp(16px,4vw,22px)}
- #schedule .sh-cal-toolbar .filter{font-size:10px!important;padding:8px 6px!important;min-height:38px}
- #schedule .sh-cal-grid{gap:4px;padding:7px;border-radius:14px}
- #schedule .sh-cal-grid .sh-cal-day{min-height:64px!important;border-radius:8px!important;padding:6px 4px!important;font-size:12px}
- #schedule .sh-cal-grid .sh-cal-heading{font-size:9px;letter-spacing:0;padding:7px 0}
- #schedule .sh-cal-bulk,#schedule .sh-cal-edit,#schedule .sh-cal-reminder,#schedule .sh41-schedule-agreements{padding:17px!important;border-radius:15px!important}
- #schedule .sh-cal-key span{font-size:11px;padding:7px 9px}
 }
 </style></head><body>
 <style id="sh73-earnings-style">
@@ -996,7 +952,6 @@ body.sh80-lock{overflow:hidden}
 <button aria-label="Jobs" data-app-page="jobs" onclick="go('jobs')" type="button"><b><svg aria-hidden="true" class="sh76-nav-icon" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24"><rect height="14" rx="2" width="18" x="3" y="7"></rect><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"></path></svg></b><span>Jobs</span></button>
 <button aria-label="Creators" data-app-page="directory" onclick="go('directory')" type="button"><b><svg aria-hidden="true" class="sh76-nav-icon" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24"><circle cx="12" cy="8" r="3.4"></circle><path d="M5 20v-2.2a7 7 0 0 1 14 0V20"></path></svg></b><span>Creators</span></button>
 <button aria-label="Inbox" data-app-page="inquiries" onclick="go('inquiries')" type="button"><b><svg aria-hidden="true" class="sh76-nav-icon" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24"><rect height="14" rx="2" width="18" x="3" y="5"></rect><path d="m4 7 8 6 8-6"></path></svg></b><span>Inbox</span></button>
-<button aria-label="My Schedule" data-app-page="schedule" onclick="shOpenSchedule()" type="button"><b><svg aria-hidden="true" class="sh76-nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18M8 15h3m3 0h3"/></svg></b><span>Schedule</span></button>
 <button aria-label="My Earnings" data-app-page="payouts" onclick="go('payouts');window.sh41LoadContracts?.()" type="button"><b><svg aria-hidden="true" class="sh76-nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15 8.5c-1-1-5-1-6 .5-1.7 2.5 6.8 2 6 5.5-.5 2.3-5.2 2.5-6.5 1M12 5.5v13"></path></svg></b><span>Earnings</span></button>
 <button aria-label="Profile" data-app-page="publicprofile" onclick="shOpenMyPublicProfile()" type="button"><b><svg aria-hidden="true" class="sh76-nav-icon" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24"><circle cx="12" cy="8" r="3.4"></circle><path d="M5 20v-2.2a7 7 0 0 1 14 0V20"></path></svg></b><span>Profile</span></button>
 </nav>
