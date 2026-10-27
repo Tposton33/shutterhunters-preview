@@ -456,7 +456,7 @@ function shDirectoryRender(){
   const btn=text('button','View profile →','action');btn.type='button';btn.addEventListener('click',()=>openProfile(p.id));if(shootDay){
    const availability=text('div','📷 Checking date…','sh-dir-date-status is-checking');body.append(availability);
    const renderToken=shootDay+':'+p.id;availability.dataset.token=renderToken;
-   client.rpc('sh_creator_availability',{p_creator:p.id,p_day:shootDay}).then(({data,error})=>{
+   client.rpc('sh48_creator_availability',{p_creator:p.id,p_day:shootDay}).then(({data,error})=>{
     if(availability.dataset.token!==renderToken||!availability.isConnected)return;
     if(error){availability.textContent='📷 Availability unavailable';availability.className='sh-dir-date-status is-error';if(availableOnly)card.hidden=true;return}
     const busy=data==='booked';availability.textContent=busy?'📷 Booked for this date':'📷 Available for this date';availability.className='sh-dir-date-status'+(busy?' is-busy':'');
@@ -1232,7 +1232,7 @@ for(const entry of saved){
    if(p.hourly_rate!=null)body.append(shBookingText('p','Starting at $'+p.hourly_rate+'/hr','sh-shortlist-meta'));
    const open=shBookingText('button','View full creator profile ↗','sh-shortlist-primary');open.type='button';open.onclick=()=>openProfile(p.id);body.append(open);
    client.rpc('public_creator_premium_tier',{creator_uuid:p.id}).then(({data,error})=>{if(!error&&(data==='studio'||data==='pro')){const tier=shBookingText('span','✦ '+data.toUpperCase()+' MEMBER','sh-shortlist-tier');body.insertBefore(tier,body.children[1]||null)}}).catch(()=>{});
-   if(job.event_date){const status=shBookingText('div','📷 Checking availability…','sh-dir-date-status is-checking');body.append(status);client.rpc('sh_creator_availability',{p_creator:p.id,p_day:job.event_date}).then(({data,error})=>{status.textContent=error?'📷 Availability unavailable':data==='booked'?'📷 Booked for this date':'📷 Available for this date';status.className='sh-dir-date-status'+(error?' is-error':data==='booked'?' is-busy':'')}).catch(()=>{status.textContent='📷 Availability unavailable';status.className='sh-dir-date-status is-error'})}
+   if(job.event_date){const status=shBookingText('div','📷 Checking availability…','sh-dir-date-status is-checking');body.append(status);client.rpc('sh48_creator_availability',{p_creator:p.id,p_day:job.event_date}).then(({data,error})=>{status.textContent=error?'📷 Availability unavailable':data==='booked'?'📷 Booked for this date':'📷 Available for this date';status.className='sh-dir-date-status'+(error?' is-error':data==='booked'?' is-busy':'')}).catch(()=>{status.textContent='📷 Availability unavailable';status.className='sh-dir-date-status is-error'})}
   }
  }else body.append(shBookingText('p','This creator profile is no longer publicly available.','sh-shortlist-meta'));
  const remove=shBookingText('button','♡ Remove from this job shortlist','sh-shortlist-remove');remove.type='button';remove.onclick=async()=>{
@@ -1304,7 +1304,7 @@ window.shShowSpotlight=async function(job){
  let possible=publicList.filter(p=>p.id!==job.client_id&&(!spec||specialtiesOf(p).some(s=>s.toLowerCase()===spec)));
  const travelRows=await client.from('sh19_travel_preferences').select('user_id,miles').in('user_id',possible.map(p=>p.id));
  const radii=new Map((travelRows.data||[]).map(r=>[r.user_id,r.miles]));
- const scores=await Promise.all(possible.map(async p=>{let busy=false;if(job.event_date){const {data,error}=await client.rpc('sh_creator_availability',{p_creator:p.id,p_day:job.event_date});if(error)return null;busy=data==='booked'}if(busy)return null;
+ const scores=await Promise.all(possible.map(async p=>{let busy=false;if(job.event_date){const {data,error}=await client.rpc('sh48_creator_availability',{p_creator:p.id,p_day:job.event_date});if(error)return null;busy=data==='booked'}if(busy)return null;
  const tier=shDirectoryTiers.get(p.id)||'free';const nearby=city&&String(p.city||'').toLowerCase()===city;
  const dist=sh19DistanceCities([p.city,p.state].filter(Boolean).join(', '),job.location);
  const radius=radii.get(p.id)??25;
@@ -1324,6 +1324,7 @@ window.shShowSpotlight=async function(job){
 
 // V13.5.6 — Private creator schedule and public camera availability.
 const shCal = {month:new Date(new Date().getFullYear(),new Date().getMonth(),1),rows:new Map(),bulk:false,selected:new Set()};
+let sh48ProjectDays=new Map();
 const shDateLocal=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
 const shDateShort=day=>new Date(day+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
 function shScheduleMessage(t){const el=$('shCalStatus');if(el)el.textContent=t}
@@ -1335,8 +1336,11 @@ async function shLoadSchedule(){
  const {data,error}=await client.from('creator_schedule_days').select('day,status,title,notes').eq('creator_id',user.id).gte('day',from).lte('day',to).order('day');
  if(error){shCal.rows.clear();shScheduleMessage('Schedule unavailable. Install V13_5_6_SCHEDULE.sql in Supabase first. '+error.message);shRenderSchedule();return}
  shCal.rows=new Map((data||[]).map(r=>[r.day,r]));
+ sh48ProjectDays=new Map();
+ const sh48Result=await client.from('sh47_private_projects').select('id,title,client_name,project_date,status').eq('owner_id',user.id).gte('project_date',from).lte('project_date',to).neq('status','cancelled').limit(300);
+ if(!sh48Result.error)for(const p of sh48Result.data||[]){const day=p.project_date;if(!sh48ProjectDays.has(day))sh48ProjectDays.set(day,[]);sh48ProjectDays.get(day).push(p)}
  await sh19LoadInquiryCalendar(from,to);
- shRenderSchedule();shScheduleMessage('Your changes are stored privately in your ShutterHunters account.');
+ shRenderSchedule();sh48SelectedProjects($('shCalDate').value);shScheduleMessage('Your changes are stored privately in your ShutterHunters account.');
 }
 let sh19CalItems=new Map();
 async function sh19LoadInquiryCalendar(from,to){
@@ -1357,12 +1361,13 @@ function shRenderSchedule(){
  const yr=shCal.month.getFullYear(), mo=shCal.month.getMonth(), count=new Date(yr,mo+1,0).getDate();
  for(let i=0;i<new Date(yr,mo,1).getDay();i++)grid.append(document.createElement('div'));
  for(let n=1;n<=count;n++){
-  const day=shDateLocal(new Date(yr,mo,n)),record=shCal.rows.get(day),state=record?.status||'available';
+  const day=shDateLocal(new Date(yr,mo,n)),record=shCal.rows.get(day),projects=sh48ProjectDays.get(day)||[],blocked=projects.some(p=>p.status==='confirmed'||p.status==='in_progress'),state=(record?.status==='booked'||blocked)?'booked':record?.status||'available';
   const b=document.createElement('button');b.type='button';b.className='sh-cal-day sh-day-'+state+(day===$('shCalDate').value?' selected':'')+(shCal.selected.has(day)?' sh-bulk-selected':'');
   b.setAttribute('aria-label',shDateShort(day)+': '+(state==='booked'?'booked':state==='available'?'available':'available'));
   b.append(text('strong',String(n)),text('span','📷','sh-cal-emoji'));
   const incoming=sh19CalItems.get(day)||[];
   if(incoming.length){const mark=text('small','● '+incoming.length+' project inquiry'+(incoming.length!==1?'ies':''),'sh19-cal-tag');b.append(mark);b.classList.add('sh19-pending');b.title=incoming.map(x=>x.inquiry.subject+' — '+x.phase).join('\n')}
+  if(projects.length){b.classList.add(blocked?'sh48-blocked':'sh48-planned');b.append(text('small',projects.length===1?'◆ '+projects[0].title:'◆ '+projects.length+' projects','sh48-calendar-pill'));b.title=[b.title,...projects.map(p=>p.title+' — '+p.status.replaceAll('_',' '))].filter(Boolean).join('\n')}
   if(record?.title)b.append(text('small',record.title));
   b.onclick=()=>{if(shCal.bulk){shCal.selected.has(day)?shCal.selected.delete(day):shCal.selected.add(day);shRenderSchedule()}else shChooseDate(day)};grid.append(b);
  }
@@ -1376,7 +1381,12 @@ function shRenderSchedule(){
  if(!rows.length)upcoming.append(text('p','No upcoming booked dates in the loaded calendar.','subtle'));
  for(const r of rows){const d=document.createElement('div');d.className='sh-cal-upcoming-item';const tomorrow=shDateLocal(new Date(Date.now()+86400000))===r.day;d.append(text('strong',(tomorrow?'🎬 Tomorrow — ':'📷 ')+shDateShort(r.day)),text('p',r.title||'Booked / unavailable'));if(r.notes)d.append(text('small',r.notes));upcoming.append(d)}
 }
-function shChooseDate(day){$('shCalDate').value=day;const r=shCal.rows.get(day);$('shCalKind').value=r?.status||'available';$('shCalTitleInput').value=r?.title||'';$('shCalNotes').value=r?.notes||'';shRenderSchedule()}
+function sh48SelectedProjects(day){const host=$('sh48ProjectDetails');if(!host)return;host.replaceChildren();const items=sh48ProjectDays.get(day)||[];host.hidden=!items.length;if(!items.length)return;
+ host.append(text('div','YOUR PRIVATE PROJECTS · '+shDateShort(day),'caps goldtext'));
+ for(const p of items){const card=document.createElement('div');card.className='sh48-project-card';const info=document.createElement('div');info.append(text('strong',p.title),text('small',(p.client_name||'Private client')+' · '+p.status.replaceAll('_',' ')+(p.status==='confirmed'||p.status==='in_progress'?' · Date blocked':' · Date available')));const btn=document.createElement('button');btn.type='button';btn.textContent='View Project →';btn.onclick=()=>{go('projects');window.sh47OpenProject?.(p.id)};card.append(info,btn);host.append(card)}
+}
+function shChooseDate(day){$('shCalDate').value=day;const r=shCal.rows.get(day);$('shCalKind').value=r?.status||'available';$('shCalTitleInput').value=r?.title||'';$('shCalNotes').value=r?.notes||'';shRenderSchedule();sh48SelectedProjects(day)}
+window.sh48ScheduleRefresh=()=>shLoadSchedule();
 $('shCalBulkMode')?.addEventListener('click',()=>{shCal.bulk=!shCal.bulk;shRenderSchedule()});
 $('shCalSelectMonth')?.addEventListener('click',()=>{shCal.bulk=true;const y=shCal.month.getFullYear(),m=shCal.month.getMonth();for(let n=1;n<=new Date(y,m+1,0).getDate();n++)shCal.selected.add(shDateLocal(new Date(y,m,n)));shRenderSchedule()});
 $('shCalDeselect')?.addEventListener('click',()=>{shCal.selected.clear();shRenderSchedule()});
