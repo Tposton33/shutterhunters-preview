@@ -372,7 +372,7 @@ async function open(){
   const jobs=document.getElementById('jobs');
   if(!jobs){lockScreen('Could not find the Jobs section. Please refresh ShutterHunters.');return;}
   const access=await hasFindJobsAccess();
-  if(!access.allowed){lockScreen(access.message);return;}
+  if(!access.allowed){if(typeof window.go==='function')window.go('jobs');lockScreen(access.message);return;}
   lastFocus=document.activeElement;
   if(typeof window.go==='function')window.go('jobs');
   else {document.querySelectorAll('main').forEach(m=>m.classList.toggle('hidden',m.id!=='jobs'));}
@@ -403,6 +403,9 @@ document.addEventListener('click',e=>{if(isFind(e)){e.preventDefault();e.stopImm
 // Existing inline navigation and Find Jobs tabs also enter the same live experience.
 function init(){window.sh79FindJobs=()=>{open()};const demo=document.getElementById('sh82DemoMarketplace');if(demo)demo.hidden=true;const p=document.querySelector('#sh82Search .sh82-search-head p');if(p)p.textContent='Search current ShutterHunters member opportunities.';}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+async function updateFindLocks(){const access=await hasFindJobsAccess();const locked=!access.allowed;document.querySelectorAll('.sh79-find').forEach(b=>{const title=b.querySelector('strong');if(title)title.textContent=locked?'🔒 Find Jobs':'Find Jobs';b.setAttribute('aria-label',locked?'Find Jobs — Pro or Studio membership required':'Find Jobs')});document.querySelectorAll('button,a').forEach(b=>{if(b.classList.contains('sh79-find'))return;const label=(b.innerText||b.textContent||'').trim();const handler=b.getAttribute('onclick')||'';if(/find jobs|find work/i.test(label)&&(/sh79FindJobs|go\('jobs'\)/.test(handler)))b.classList.toggle('sh-find-membership-locked',locked)})}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{updateFindLocks();setTimeout(updateFindLocks,1300)});else{updateFindLocks();setTimeout(updateFindLocks,1300)}
+window.addEventListener('focus',()=>{updateFindLocks()});
 window.ShutterHuntersFindJobs={open,close};
 })();
 
