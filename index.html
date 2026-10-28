@@ -877,7 +877,7 @@ body.sh80-lock{overflow:hidden}
 /* Hide the experimental private-project delivery form, leave all persisted data untouched. */
 #sh53Owner,#sh53Recipient{display:none!important}
 @media(max-width:620px){.sh55-simple-grid{grid-template-columns:1fr}.sh55-simple-grid .sh46-tile{min-height:132px}}
-</style><style id="sh-contract-clarity">.sh41-contract-row .sh-contract-view,#sh41ScheduleContracts button.filter{background:#e0b27a!important;color:#152927!important;border:1px solid #e0b27a!important;font-weight:800!important;opacity:1!important}.sh41-contract-row .sh-contract-view:hover,#sh41ScheduleContracts button.filter:hover{background:#f3ca99!important;color:#102324!important}.sh-contract-message-link{display:inline-flex!important;align-items:center;justify-content:center;margin-top:12px;padding:12px 18px!important;background:#e0b27a!important;color:#122925!important;border-radius:10px!important;font-weight:800!important;opacity:1!important}.sh-find-membership-locked::after{content:" 🔒";font-size:.82em}</style>
+</style><style id="sh-contract-clarity">.sh41-contract-row .sh-contract-view,#sh41ScheduleContracts button.filter{background:#e0b27a!important;color:#152927!important;border:1px solid #e0b27a!important;font-weight:800!important;opacity:1!important}.sh41-contract-row .sh-contract-view:hover,#sh41ScheduleContracts button.filter:hover{background:#f3ca99!important;color:#102324!important}.sh-contract-message-link{display:inline-flex!important;align-items:center;justify-content:center;margin-top:12px;padding:12px 18px!important;background:#e0b27a!important;color:#122925!important;border-radius:10px!important;font-weight:800!important;opacity:1!important}.sh-find-membership-locked::after{content:none!important}</style>
 <style id="sh-contract-text-contrast-fix">
 /* Keep pale contract editor text legible and preserve readable button labels. */
 #sh41ContractEditor,#sh41ContractEditor label,#sh41ContractEditor h3,#sh41ContractEditor .subtle,#sh41EditorContext{color:#152a28!important;opacity:1!important}
@@ -1347,5 +1347,102 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <script defer src="sh49-clients.js"></script>
 <script defer src="sh50-workspace.js"></script>
 <script defer src="sh53-delivery.js"></script>
+
+<!-- Navigation-only fix: keep the two-choice landing page available to all users. -->
+<style id="sh-jobs-nav-simple-css">
+.sh-find-membership-locked::after{content:none!important}
+#jobs .sh79-find{opacity:1!important;cursor:pointer!important}
+#jobs .sh79-find.sh-free-member-choice strong::after{content:" 🔒";font-family:system-ui,sans-serif;font-size:.78em;vertical-align:middle}
+#jobs .sh79-find.sh-free-member-choice{opacity:1!important;pointer-events:auto!important;cursor:pointer!important}
+</style>
+<script id="sh-jobs-nav-simple">
+(()=>{'use strict';
+ const landing=()=>{if(typeof go==='function')go('jobs');else window.go?.('jobs');window.scrollTo(0,0);syncMemberIcon()};
+ async function syncMemberIcon(){
+  const choice=document.querySelector('#jobs .sh79-find');if(!choice)return;
+  choice.classList.remove('sh-free-member-choice');
+  try{const cfg=window.SHUTTERHUNTERS_CONFIG||{};if(!cfg.supabaseUrl||!cfg.supabaseAnonKey||!window.supabase?.createClient)return;
+   const db=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+   const {data:auth,error:authError}=await db.auth.getUser();if(authError||!auth?.user)return;
+   const {data:member,error}=await db.from('creator_memberships').select('tier,status').eq('user_id',auth.user.id).maybeSingle();if(error)return;
+   if(!(member?.status==='active'&&['pro','studio'].includes(String(member?.tier||'').toLowerCase())))choice.classList.add('sh-free-member-choice');
+  }catch(e){console.warn('Could not determine member badge',e)}
+ };
+ let pending=false;
+ async function findJobs(){
+  if(pending)return;
+  pending=true;
+  const button=document.querySelector('#jobs .sh79-find');
+  if(button)button.setAttribute('aria-busy','true');
+  try{
+   const cfg=window.SHUTTERHUNTERS_CONFIG||{};
+   if(!cfg.supabaseUrl||!cfg.supabaseAnonKey||!window.supabase?.createClient){
+    // Do not grant access when the membership cannot be verified.
+    landing();return;
+   }
+   const db=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+   const {data:auth,error:authError}=await db.auth.getUser();
+   if(authError||!auth?.user){window.go?.('account');return;}
+   const {data:member,error}=await db.from('creator_memberships').select('tier,status').eq('user_id',auth.user.id).maybeSingle();
+   if(error){console.warn('Membership lookup failed:',error.message);landing();return;}
+   if(member?.status==='active'&&['pro','studio'].includes(String(member?.tier||'').toLowerCase())){
+    if(typeof window.ShutterHuntersFindJobs?.open==='function')await window.ShutterHuntersFindJobs.open();
+    else {landing();document.getElementById('sh77OpenJobs')?.scrollIntoView({behavior:'smooth'});}
+   } else window.go?.('membership');
+  }catch(err){console.warn('Find Jobs navigation unavailable:',err);landing()}
+  finally{pending=false;button?.removeAttribute('aria-busy')}
+ }
+ // Registered before the deferred marketplace script, so no membership dialog flashes.
+ document.addEventListener('click',event=>{
+  const button=event.target.closest('button,a');if(!button)return;
+  if(button.closest('#shFindV14')||button.closest('#membership'))return;
+  if(button.matches('#jobs .sh79-find')){
+   event.preventDefault();event.stopImmediatePropagation();findJobs();return;
+  }
+  const label=(button.innerText||button.textContent||'').trim().toLowerCase();
+  const handler=button.getAttribute('onclick')||'';
+  const navigatesJobs=/go\('jobs'\)|sh79FindJobs/.test(handler)||button.dataset.appPage==='jobs';
+  if(navigatesJobs&&(/find jobs|find work/i.test(label)||button.dataset.appPage==='jobs')){
+   event.preventDefault();event.stopImmediatePropagation();landing();
+  }
+ },true);
+ function clearLocks(){
+  document.querySelectorAll('.sh79-find strong').forEach(el=>{if(el.textContent!=='Find Jobs')el.textContent='Find Jobs'});
+  document.querySelectorAll('.sh-find-membership-locked').forEach(el=>el.classList.remove('sh-find-membership-locked'));
+  document.querySelectorAll('.sh79-find').forEach(el=>{if(el.getAttribute('aria-label')!=='Find Jobs')el.setAttribute('aria-label','Find Jobs')});
+ }
+ function ready(){clearLocks();syncMemberIcon();
+  const target=document.querySelector('#jobs .sh79-find');
+  if(target)new MutationObserver(()=>{if(target.querySelector('strong')?.textContent!=='Find Jobs'||target.classList.contains('sh-find-membership-locked'))clearLocks()}).observe(target,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ready);else ready();
+})();
+</script>
+
+<!-- Header-only Find Jobs icon cleanup. The landing-page membership indicator stays. -->
+<style id="sh-header-find-jobs-cleanup">
+.header .navlinks button[onclick="go('jobs')"]::before,
+.header .navlinks button[onclick="go('jobs')"]::after,
+.header .navlinks button[onclick="go('jobs')"] .sh-lock,
+.header .navlinks button[onclick="go('jobs')"] .lock-icon,
+.header .navlinks button[onclick="go('jobs')"] svg,
+.header .navlinks button[onclick="go('jobs')"] i {display:none!important;content:none!important}
+</style>
+<script id="sh-header-find-jobs-cleanup-script">
+(()=>{
+ const clean=()=>{
+  const btn=document.querySelector('.header .navlinks button[onclick="go(\'jobs\')"]');
+  if(!btn)return;
+  // Only touch the top navigation label, never the two choices on the Jobs page.
+  if(btn.textContent.trim()!=='Find jobs' || btn.children.length){btn.replaceChildren(document.createTextNode('Find jobs'));}
+  btn.removeAttribute('title');
+  btn.setAttribute('aria-label','Find jobs');
+ };
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',clean);else clean();
+ window.addEventListener('pageshow',clean);
+ const header=document.querySelector('.header');
+ if(header){const observer=new MutationObserver(clean);observer.observe(header,{childList:true,subtree:true,characterData:true});}
+})();
+</script>
 </body>
 </html>
