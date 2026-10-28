@@ -9,6 +9,7 @@ const choices=['Weddings','Commercial','Real Estate','Events','Portraits','Sport
 let v5Media=[],v5Filter='video';
 window.sh41Db=()=>client;
 let client=null,user=null,profile=null,viewed=null,mode='new',publicList=[],creatorCache=new Map();
+let shAuthLoadVersion=0;
 const say=(s)=>{msg.textContent=s};
 const billingStatus=()=>document.getElementById('stripeBillingStatus');
 function billingMessage(message){const el=billingStatus();if(el)el.textContent=message;}
@@ -53,9 +54,11 @@ initSandboxBilling();
 const text=(tag,value,cls)=>{const n=document.createElement(tag);if(cls)n.className=cls;n.textContent=value??'';return n};
 const validLink=s=>{try{const u=new URL(s);return /^https?:$/.test(u.protocol)?u.href:null}catch{return null}};
 async function loadMembership(){
+ const ownerId=user?.id||null;
  const level=$('membershipLevel'),detail=$('membershipDetail');if(!level||!detail)return;
  if(!user){level.textContent='Free membership';detail.textContent='Sign in to view your membership.';return}
- const {data,error}=await client.from('creator_memberships').select('tier,status,current_period_end').eq('user_id',user.id).maybeSingle();
+ const {data,error}=await client.from('creator_memberships').select('tier,status,current_period_end').eq('user_id',ownerId).maybeSingle();
+ if(user?.id!==ownerId)return;
  if(error){level.textContent='Membership unavailable';detail.textContent='Run V10_MEMBERSHIPS.sql in Supabase to enable account status. No payment is active.';return}
  const active=data?.status==='active'&&['pro','studio'].includes(data?.tier);
  level.textContent=active?(data.tier==='studio'?'Studio membership':'Pro membership'):'Free membership';
@@ -72,8 +75,19 @@ function specialtiesOf(p){const values=[p?.specialty,...(Array.isArray(p?.specia
 function primaryAndSelected(f){const primary=String(f.get('specialty')||'Weddings');return [primary,...[...$('specialtyChoices').querySelectorAll('input:checked')].map(x=>x.value).filter(x=>x!==primary)]}
 function fillForm(p){const f=$('onlineProfileForm');for(const [key,val] of Object.entries(p)){const el=f.elements.namedItem(key);if(!el||key==='specialties')continue;if(el.type==='checkbox')el.checked=!!val;else el.value=val??''}const set=new Set(p.specialties||[]);$('specialtyChoices').querySelectorAll('input').forEach(x=>x.checked=set.has(x.value));}
 function showStudio(){if(!user)return;$('studioProfileSummary').replaceChildren();const p=profile;const summary=$('studioProfileSummary');if(!p){summary.append(text('p','First, add your name, location, main specialty and rate in My Account. Then upload your creative work below.'));return}summary.append(text('h3',p.display_name),text('p',p.role+' · '+p.city+', '+p.state),text('p',specialtiesOf(p).join('  ·  ')));if(!p.is_public)summary.append(text('p','Private profile — turn on Publish in My Account when ready.'))}
-async function updateAuth(){const {data,error}=await client.auth.getUser();const before=user?.id;user=error?null:data.user;if(before!==user?.id){shActiveInquiry=null;const thread=$('shThread');if(thread)thread.hidden=true;}guest.classList.toggle('hidden',!!user);member.classList.toggle('hidden',!user);updateMenu();shSyncAccountMenu();if(!user){profile=null;v12ThemeLoadedFor=null;$('v12ThemePanel').hidden=true;loadMembership();v111LoadPlan();v111LoadSaved();return}$('signedInAs').textContent=user.email||'Signed in';await loadMembership();await v111LoadPlan();await v111LoadSaved();if(before!==user.id||!v12ThemeLoadedFor||v12ThemeLoadedFor!==user.id){v12ThemeLoadedFor=user.id;await v12LoadMyExperience()}if(before!==user.id||!profile){const q=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(q.error){say('Could not load your profile: '+q.error.message);return}profile=q.data; if(profile)fillForm(profile);sh19LoadTravel().catch(console.warn);showStudio();await loadMyMedia();await updateInquiryBadge()}else{await loadMyMedia()}}
-async function refreshProfile(){if(!user)return;const {data,error}=await client.from('profiles').select('*').eq('id',user.id).maybeSingle();if(!error){profile=data;if(profile)fillForm(profile);sh19LoadTravel().catch(console.warn);showStudio();await updateInquiryBadge()}}
+async function updateAuth(){const loadVersion=++shAuthLoadVersion;const {data,error}=await client.auth.getUser();if(loadVersion!==shAuthLoadVersion)return;const before=user?.id;user=error?null:data.user;if(before!==user?.id){
+  // Clear prior account's private UI immediately when the authenticated identity changes.
+  profile=null;viewed=null;shActiveInquiry=null;v12ThemeLoadedFor=null;
+  const thread=$('shThread');if(thread)thread.hidden=true;
+  const form=$('onlineProfileForm');if(form)form.reset();
+  const level=$('membershipLevel');if(level)level.textContent='Checking membership…';
+  const detail=$('membershipDetail');if(detail)detail.textContent='';
+  creatorCache.clear();
+  const summary=$('studioProfileSummary');if(summary)summary.replaceChildren();
+  const media=$('manageMedia');if(media)media.replaceChildren();
+  const publicPage=$('publicprofile');if(publicPage&&!publicPage.classList.contains('hidden'))go('account');
+}guest.classList.toggle('hidden',!!user);member.classList.toggle('hidden',!user);updateMenu();shSyncAccountMenu();if(!user){profile=null;v12ThemeLoadedFor=null;$('v12ThemePanel').hidden=true;loadMembership();v111LoadPlan();v111LoadSaved();return}$('signedInAs').textContent=user.email||'Signed in';await loadMembership();await v111LoadPlan();await v111LoadSaved();if(before!==user.id||!v12ThemeLoadedFor||v12ThemeLoadedFor!==user.id){v12ThemeLoadedFor=user.id;await v12LoadMyExperience()}if(before!==user.id||!profile){const requestedUserId=user.id;const q=await client.from('profiles').select('*').eq('id',requestedUserId).maybeSingle();if(loadVersion!==shAuthLoadVersion||user?.id!==requestedUserId)return;if(q.error){say('Could not load your profile: '+q.error.message);return}profile=q.data; if(profile)fillForm(profile);sh19LoadTravel().catch(console.warn);showStudio();await loadMyMedia();await updateInquiryBadge()}else{await loadMyMedia()}}
+async function refreshProfile(){if(!user)return;const requestedUserId=user.id;const {data,error}=await client.from('profiles').select('*').eq('id',requestedUserId).maybeSingle();if(user?.id!==requestedUserId)return;if(!error){profile=data;if(profile)fillForm(profile);sh19LoadTravel().catch(console.warn);showStudio();await updateInquiryBadge()}}
 const forms=[$('signupForm'),$('loginForm')];
 if(!ready){forms.forEach(f=>f.querySelectorAll('input,button').forEach(x=>x.disabled=true));notice.textContent='Account configuration is missing. Upload config.js containing only your public Supabase project URL and publishable key.';return}
 // Capture the incoming recovery callback BEFORE supabase-js consumes/removes URL tokens.
@@ -432,7 +446,17 @@ async function loadMyMedia(){
   tools.append(del);item.append(thumb,info,tools);out.append(item);
  }
 }
-$('viewMine').onclick=()=>openProfile(user?.id);$('hubViewProfile').onclick=()=>openProfile(user?.id);$('hubRefreshPosts').onclick=()=>loadMyMedia();
+async function shOpenOwnProfileSafe(){
+  const r=await client.auth.getUser();
+  if(r.error||!r.data?.user){go('account');return;}
+  const uid=r.data.user.id;
+  const result=await client.from('profiles').select('id').eq('id',uid).maybeSingle();
+  if(result.error){say('Unable to load your profile: '+result.error.message);go('account');return;}
+  if(!result.data){go('account');say('This account has no creator profile yet. Add your details to create one.');return;}
+  if(user?.id!==uid){go('account');return;}
+  await openProfile(uid);
+}
+$('viewMine').onclick=shOpenOwnProfileSafe;$('hubViewProfile').onclick=shOpenOwnProfileSafe;$('hubRefreshPosts').onclick=()=>loadMyMedia();
 const shDirectoryTiers=new Map();
 let shDirectoryLoadPromise=null;
 function shDirectoryRank(tier){return tier==='studio'?2:tier==='pro'?1:0;}
@@ -890,7 +914,8 @@ let v111FeaturedId=null;let v111SavedIds=new Set();
 async function v111LoadPlan(){
  const title=$('v111PlanName'),detail=$('v111PlanDetail');if(!title)return;
  if(!user){title.textContent='Free creator';detail.textContent='Sign in to see your membership. Sandbox billing only.';return;}
- const {data,error}=await client.from('creator_memberships').select('tier,status,current_period_end').eq('user_id',user.id).maybeSingle();
+ const {data,error}=await client.from('creator_memberships').select('tier,status,current_period_end').eq('user_id',ownerId).maybeSingle();
+ if(user?.id!==ownerId)return;
  if(error){detail.textContent='Membership status currently unavailable.';return;}
  const active=data?.status==='active'&&['pro','studio'].includes(data?.tier);
  title.textContent=active?(data.tier==='studio'?'Studio membership':'Pro membership'):'Free creator';
