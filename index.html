@@ -1590,7 +1590,15 @@ async function search(){const oldDemo=$('sh82Modal');if(oldDemo){oldDemo.hidden=
 const q=await db.from('sh_job_posts').select('id,client_id,title,location,specialty,budget,details,status,event_date,created_at').eq('status','open').order('created_at',{ascending:false}).limit(100);if(q.error)throw q.error;opportunities=(q.data||[]).filter(j=>j.client_id!==uid&&matchJob(j,f)).sort((a,b)=>(Number(b.budget||0)-Number(a.budget||0))).slice(0,5);activeIndex=0;render();
 if(f.loc&&f.radius!=='all')status.textContent='Location matching uses city text for now, not an exact mile radius.';
 }catch(err){content.replaceChildren(node('p','Unable to load live jobs: '+(err.message||'Unknown error')));console.error('ShutterHunters live opportunities:',err)}}
-function wire(){install();const b=$('sh82Run');if(b){b.onclick=null;b.addEventListener('click',async e=>{e.preventDefault();e.stopImmediatePropagation();try{await search()}catch(err){install();container.hidden=false;content.replaceChildren(node('p','Could not search opportunities: '+(err?.message||'Please try again.')));console.error('ShutterHunters Top 5 search:',err)}},{capture:true})}
+function wire(){install();const oldButton=$('sh82Run');if(oldButton){
+// Replace the old search button node: it carried legacy onclick and other handlers.
+// A replacement ensures exactly one action instead of racing multiple popup flows.
+const b=oldButton.cloneNode(true);oldButton.replaceWith(b);
+b.removeAttribute('onclick');b.type='button';
+b.addEventListener('click',async e=>{e.preventDefault();e.stopPropagation();
+const demo=$('sh82Modal');if(demo){demo.hidden=true;demo.style.removeProperty('display')}
+try{await search()}catch(err){install();container.hidden=false;content.replaceChildren(node('p','Could not search opportunities: '+(err?.message||'Please try again.')));console.error('ShutterHunters Top 5 search:',err)}
+});}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!container.hidden){container.hidden=true;document.body.style.removeProperty('overflow')}});const thread=$('shThread');if(thread){const head=thread.querySelector('.sh-thread-head');const btn=node('button','View Their Profile ↗','filter sh-top-view-profile');btn.type='button';btn.onclick=async()=>{const inquiry=window.sh41ActiveInquiry?.();if(!inquiry){alert('Open a conversation first.');return}const db=client();const auth=await db?.auth.getUser();const uid=auth?.data?.user?.id;if(!uid)return;const other=inquiry.sender_id===uid?inquiry.recipient_id:inquiry.sender_id;if(!other||other===uid)return;await window.shTop5OpenProfile?.(other)};head?.append(btn)}}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',wire);else wire();
 })();
