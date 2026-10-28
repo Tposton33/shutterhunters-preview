@@ -1584,9 +1584,9 @@ function matchJob(job,f){if(f.kind&&!String(job.specialty||'').toLowerCase().inc
 if(f.loc&&f.radius!=='all'){const place=String(job.location||'').toLowerCase();const city=f.loc.split(',')[0].trim();if(city&&!place.includes(city))return false}return true}
 function render(){content.replaceChildren();if(!opportunities.length){content.append(node('p','No matching live jobs yet. Expand your filters or try again later.'));return}const job=opportunities[activeIndex],counter=node('p',`MATCH ${activeIndex+1} OF ${opportunities.length}`,'sh-top-counter');const heading=node('h3',job.title||'Creative project');heading.style.cssText='font:normal 30px Georgia,serif;color:#fff0dc;margin:10px 0';const meta=node('div',undefined,'sh-top-meta');[job.location,job.specialty,job.event_date?'Date: '+job.event_date:null,job.budget!=null?'Budget: $'+Number(job.budget).toLocaleString():null].filter(Boolean).forEach(t=>meta.append(node('span',t)));const desc=node('p',(job.details||'Contact the client for details.').slice(0,600));const actions=node('div',undefined,'sh-top-actions');
 const prev=node('button','← Previous','sh-top-ghost'),next=node('button','Next →','sh-top-ghost'),view=node('button','View Job','sh-top-ghost'),apply=node('button','Apply to Project →');prev.disabled=activeIndex===0;next.disabled=activeIndex===opportunities.length-1;prev.onclick=()=>{activeIndex--;status.textContent='';render()};next.onclick=()=>{activeIndex++;status.textContent='';render()};view.onclick=()=>showJob(job);apply.onclick=()=>submit(job,apply);actions.append(prev,view,apply,next);content.append(counter,heading,meta,desc,actions)}
-function showJob(job){const overlay=$('sh81JobOverlay'),panel=$('sh81JobPanel');if(!overlay||!panel)return;panel.replaceChildren();const close=node('button','Close ×','sh81-x');close.onclick=()=>{overlay.classList.remove('open');overlay.setAttribute('aria-hidden','true');document.body.style.removeProperty('overflow')};panel.append(close,node('small','REAL MEMBER JOB'),node('h2',job.title||'Project'),node('p',[job.location,job.specialty,job.event_date,job.budget!=null?'$'+Number(job.budget).toLocaleString():null].filter(Boolean).join(' · ')),node('p',job.details||'No additional details'));const apply=node('button','Apply to Project →');apply.onclick=()=>submit(job,apply);panel.append(apply);overlay.classList.add('open');overlay.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';close.focus()}
+function showJob(job){const oldDemo=$('sh82Modal');if(oldDemo){oldDemo.hidden=true;oldDemo.style.removeProperty('display')}const overlay=$('sh81JobOverlay'),panel=$('sh81JobPanel');if(!overlay||!panel)return;panel.replaceChildren();const close=node('button','Close ×','sh81-x');close.onclick=()=>{overlay.classList.remove('open');overlay.setAttribute('aria-hidden','true');document.body.style.removeProperty('overflow')};panel.append(close,node('small','REAL MEMBER JOB'),node('h2',job.title||'Project'),node('p',[job.location,job.specialty,job.event_date,job.budget!=null?'$'+Number(job.budget).toLocaleString():null].filter(Boolean).join(' · ')),node('p',job.details||'No additional details'));const apply=node('button','Apply to Project →');apply.onclick=()=>submit(job,apply);panel.append(apply);overlay.classList.add('open');overlay.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';close.focus()}
 async function submit(job,button){if(busy)return;const db=client();if(!db){status.textContent='Sign in to apply.';return}busy=true;button.disabled=true;button.textContent='Sending application…';try{const auth=await db.auth.getUser();if(!auth.data?.user)throw Error('Sign in to apply.');if(job.client_id===auth.data.user.id)throw Error('You cannot apply to your own job.');const message=`Hello! I am interested in your project "${job.title}" and would love to be considered. Please view my ShutterHunters profile and portfolio. This is an automated application from Find Jobs.`;const res=await db.rpc('sh_apply_to_job',{p_job_id:job.id,p_message:message});if(res.error)throw res.error;if(typeof window.sh78TrackApplication==='function')window.sh78TrackApplication(job);status.textContent='Application sent! The client can review it in New Inquiries.';button.textContent='✓ Application Sent';}catch(e){status.textContent=e.message||'Could not send application.';button.disabled=false;button.textContent='Apply to Project →'}finally{busy=false}}
-async function search(){install();container.hidden=false;container.focus();content.replaceChildren(node('p','Finding real member jobs…'));status.textContent='';const db=client();if(!db){content.replaceChildren(node('p','Sign in to view real opportunities.'));return}let auth;try{auth=await db.auth.getUser()}catch(err){content.replaceChildren(node('p','Could not check your sign-in: '+(err?.message||'Please sign in again.')));return}const uid=auth.data?.user?.id;if(!uid){content.replaceChildren(node('p','Sign in to find work.'));return}const f=getFilters();try{const membership=await db.from('creator_memberships').select('*').eq('user_id',uid).maybeSingle();if(membership.error)throw membership.error;const m=membership.data||{};const tier=String(m.tier||'free').toLowerCase();if(m.status!=='active'||!['pro','studio'].includes(tier)){container.hidden=true;if(typeof go==='function')go('membership');return}
+async function search(){const oldDemo=$('sh82Modal');if(oldDemo){oldDemo.hidden=true;oldDemo.style.removeProperty('display')}install();container.hidden=false;container.focus();content.replaceChildren(node('p','Finding real member jobs…'));status.textContent='';const db=client();if(!db){content.replaceChildren(node('p','Sign in to view real opportunities.'));return}let auth;try{auth=await db.auth.getUser()}catch(err){content.replaceChildren(node('p','Could not check your sign-in: '+(err?.message||'Please sign in again.')));return}const uid=auth.data?.user?.id;if(!uid){content.replaceChildren(node('p','Sign in to find work.'));return}const f=getFilters();try{const membership=await db.from('creator_memberships').select('*').eq('user_id',uid).maybeSingle();if(membership.error)throw membership.error;const m=membership.data||{};const tier=String(m.tier||'free').toLowerCase();if(m.status!=='active'||!['pro','studio'].includes(tier)){container.hidden=true;if(typeof go==='function')go('membership');return}
 const q=await db.from('sh_job_posts').select('id,client_id,title,location,specialty,budget,details,status,event_date,created_at').eq('status','open').order('created_at',{ascending:false}).limit(100);if(q.error)throw q.error;opportunities=(q.data||[]).filter(j=>j.client_id!==uid&&matchJob(j,f)).sort((a,b)=>(Number(b.budget||0)-Number(a.budget||0))).slice(0,5);activeIndex=0;render();
 if(f.loc&&f.radius!=='all')status.textContent='Location matching uses city text for now, not an exact mile radius.';
 }catch(err){content.replaceChildren(node('p','Unable to load live jobs: '+(err.message||'Unknown error')));console.error('ShutterHunters live opportunities:',err)}}
@@ -1595,5 +1595,31 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!container.hidden){
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',wire);else wire();
 })();
 </script>
+
+<style id="sh-job-details-layer-fix">
+/* Job details must appear above Top Five and other Find Jobs panels. */
+#sh81JobOverlay.sh81-overlay.open {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 100000 !important;
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+#sh81JobOverlay .sh81-panel {
+  position: relative;
+  z-index: 1;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+</style>
+<style id="sh-top5-dialog-order-repair">
+/* Only the visible dialog should intercept interactions. */
+#sh82Modal[hidden]{display:none!important;pointer-events:none!important}
+#shTopJobs:not([hidden]){z-index:110000!important;isolation:isolate}
+#sh81JobOverlay.sh81-overlay.open{z-index:120000!important}
+#sh81JobOverlay.sh81-overlay:not(.open){display:none!important;pointer-events:none!important}
+</style>
 </body>
 </html>
